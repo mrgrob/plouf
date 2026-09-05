@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Ploufplouf">
+  <defs>
+    <linearGradient id="ciel" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2E6DA4"/>
+      <stop offset="1" stop-color="#16345f"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#ciel)"/>
+  <circle cx="358" cy="150" r="66" fill="#F5B301"/>
+  <g fill="#9CC7E8">
+    <path d="M150 92c34 44 58 78 58 104a58 58 0 1 1-116 0c0-26 24-60 58-104z"/>
+  </g>
+  <g stroke="#9CC7E8" stroke-width="20" stroke-linecap="round" fill="none" opacity=".85">
+    <path d="M120 350c26-26 52-26 78 0"/>
+    <path d="M232 372c30-30 60-30 90 0"/>
+  </g>
+  <ellipse cx="256" cy="424" rx="150" ry="26" fill="#0d2244" opacity=".55"/>
+  <g fill="#e8f1fa">
+    <circle cx="196" cy="392" r="11"/>
+    <circle cx="316" cy="386" r="9"/>
+    <circle cx="256" cy="372" r="7"/>
+  </g>
+</svg>

@@ -1,0 +1,2119 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Ploufplouf — la météo réelle de Blanquefort</title>
+<meta name="description" content="Combien de jours pleut-il vraiment à Blanquefort ? La météo mesurée jour par jour, en ne comptant que la pluie tombée entre 7 h et 21 h.">
+<meta name="theme-color" content="#1B3F73">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icone.svg" type="image/svg+xml">
+<style>
+/* ============================================================
+   Ploufplouf — feuille de style unique
+   Palette : ambre = sec, rampe de bleus = eau.
+   Choisie pour rester lisible en daltonisme deutan/protan
+   (aucun couple rouge/vert porteur d'information).
+   ============================================================ */
+:root {
+  --fond: #f7f8fa;
+  --fond-carte: #ffffff;
+  --fond-doux: #eef1f5;
+  --texte: #1a2430;
+  --texte-doux: #5b6875;
+  --bord: #d8dee6;
+  --accent: #1B3F73;
+  --accent-clair: #2E6DA4;
+  --ombre: 0 1px 3px rgba(16, 30, 48, .10), 0 6px 18px rgba(16, 30, 48, .06);
+  --rayon: 14px;
+  --cat-soleil: #F5B301;
+  --cat-eclaircies: #9CC7E8;
+  --cat-gris: #B9BEC4;
+  --cat-averse: #5B9BD5;
+  --cat-crachin: #7E9BB5;
+  --cat-moments: #2E6DA4;
+  --cat-continue: #1B3F73;
+  --cat-inconnu: #e4e6e9;
+  --chaud: #d1495b;
+  --froid: #4a7fb5;
+  color-scheme: light dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --fond: #12161c;
+    --fond-carte: #1a2029;
+    --fond-doux: #232b36;
+    --texte: #e8edf3;
+    --texte-doux: #9aa7b6;
+    --bord: #2f3946;
+    --accent: #7fb2e5;
+    --accent-clair: #9cc7e8;
+    --ombre: 0 1px 3px rgba(0, 0, 0, .5), 0 6px 18px rgba(0, 0, 0, .3);
+    --cat-inconnu: #2a323c;
+  }
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  background: var(--fond);
+  color: var(--texte);
+  font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  -webkit-text-size-adjust: 100%;
+  padding-bottom: calc(64px + env(safe-area-inset-bottom));
+}
+h1, h2, h3 { line-height: 1.25; margin: 0 0 .4em; }
+h1 { font-size: 1.15rem; letter-spacing: -.01em; }
+h2 { font-size: 1.05rem; }
+h3 { font-size: .95rem; }
+p { margin: 0 0 .8em; }
+a { color: var(--accent); }
+small { color: var(--texte-doux); }
+
+/* ---------- En-tête ---------- */
+.entete {
+  position: sticky; top: 0; z-index: 20;
+  background: var(--fond-carte);
+  border-bottom: 1px solid var(--bord);
+  padding: 10px 12px calc(10px) 12px;
+  padding-top: calc(10px + env(safe-area-inset-top));
+}
+.entete-haut { display: flex; align-items: center; gap: 8px; }
+.entete-haut .marque { font-weight: 700; font-size: 1.05rem; letter-spacing: -.02em; white-space: nowrap;
+                        min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.entete-haut .marque span { opacity: .55; font-weight: 500; }
+.selecteurs { display: flex; gap: 6px; margin-left: auto; flex: none; }
+.selecteurs select { max-width: 38vw; }
+@media (max-width: 440px) { .entete-haut .marque span { display: none; } }
+select, button, input {
+  font: inherit; color: inherit;
+  background: var(--fond-doux);
+  border: 1px solid var(--bord);
+  border-radius: 9px;
+  padding: 6px 9px;
+  max-width: 46vw;
+}
+button { cursor: pointer; }
+button:active { transform: translateY(1px); }
+.bouton-plat { background: none; border: none; padding: 6px 8px; color: var(--accent); }
+
+/* ---------- Barre de progression ---------- */
+.progression { margin-top: 8px; display: none; }
+.progression.actif { display: block; }
+.progression .rail { height: 4px; background: var(--fond-doux); border-radius: 3px; overflow: hidden; }
+.progression .jauge { height: 100%; width: 0%; background: var(--accent-clair); transition: width .25s ease; }
+.progression .libelle { font-size: .78rem; color: var(--texte-doux); margin-top: 4px; }
+
+/* ---------- Bandeaux ---------- */
+.bandeau {
+  margin: 10px 12px; padding: 10px 12px;
+  border-radius: var(--rayon); border: 1px solid var(--bord);
+  background: var(--fond-carte); font-size: .85rem;
+}
+.bandeau.alerte { border-color: #d9a441; background: color-mix(in srgb, #d9a441 12%, var(--fond-carte)); }
+.bandeau.erreur { border-color: var(--chaud); background: color-mix(in srgb, var(--chaud) 10%, var(--fond-carte)); }
+.bandeau code { word-break: break-all; font-size: .78rem; opacity: .8; }
+.bandeau .actions { margin-top: 8px; display: flex; gap: 8px; }
+
+/* ---------- Vues ---------- */
+main { padding: 0 12px; max-width: 900px; margin: 0 auto; }
+.vue { display: none; padding-top: 12px; }
+.vue.actif { display: block; }
+.carte {
+  background: var(--fond-carte);
+  border: 1px solid var(--bord);
+  border-radius: var(--rayon);
+  box-shadow: var(--ombre);
+  padding: 14px;
+  margin-bottom: 12px;
+}
+.rangee { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.rangee.espace { justify-content: space-between; }
+
+/* ---------- Mosaïque annuelle ---------- */
+.mosaique { display: grid; grid-template-columns: 2.4em repeat(31, 1fr); gap: 2px; align-items: center; }
+.mosaique .mois-nom { font-size: .68rem; color: var(--texte-doux); text-align: right; padding-right: 4px; }
+.mosaique .jour-num { font-size: .55rem; color: var(--texte-doux); text-align: center; }
+.case {
+  aspect-ratio: 1 / 1; border-radius: 2px; background: var(--cat-inconnu);
+  border: 0; padding: 0; min-width: 0; cursor: pointer;
+}
+.case.vide { background: transparent; cursor: default; }
+.case.absent { background: repeating-linear-gradient(45deg, var(--cat-inconnu), var(--cat-inconnu) 2px, transparent 2px, transparent 4px); }
+.case.partiel { box-shadow: inset 0 0 0 1.5px var(--texte-doux); background-image: repeating-linear-gradient(45deg, rgba(255,255,255,.45), rgba(255,255,255,.45) 2px, transparent 2px, transparent 4px); }
+.case.selection { outline: 2px solid var(--texte); outline-offset: 1px; }
+.case.attenue { opacity: .18; }
+
+/* ---------- Grille mensuelle (gros carreaux) ---------- */
+.mois-grille { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; }
+.mois-grille .entete-jour { font-size: .7rem; color: var(--texte-doux); text-align: center; padding-bottom: 2px; }
+.gros-case {
+  aspect-ratio: 1 / 1; border-radius: 9px; border: 1px solid var(--bord);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 1px; padding: 2px; cursor: pointer; background: var(--cat-inconnu);
+  min-width: 0;
+}
+.gros-case.vide { visibility: hidden; }
+.gros-case .num { font-size: .68rem; font-weight: 600; color: #1a2430; opacity: .75; }
+.gros-case.sombre .num { color: #ffffff; opacity: .92; }
+.gros-case .emo { font-size: 1.15rem; line-height: 1; }
+.gros-case.selection { outline: 2px solid var(--texte); outline-offset: 1px; }
+
+/* ---------- Légende ---------- */
+.legende { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 10px; }
+.legende button {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: .74rem; padding: 4px 8px; border-radius: 999px;
+  background: var(--fond-doux); border: 1px solid var(--bord); max-width: none;
+}
+.legende button[aria-pressed="true"] { border-color: var(--texte); font-weight: 600; }
+.pastille { width: 11px; height: 11px; border-radius: 3px; flex: none; }
+
+/* ---------- Détail du jour ---------- */
+.detail-titre { font-weight: 700; font-size: 1rem; }
+.verdict { display: flex; align-items: center; gap: 8px; margin: 8px 0; }
+.verdict .emo { font-size: 1.8rem; line-height: 1; }
+.verdict .nom { font-weight: 700; }
+.raisons { margin: 8px 0 0; padding-left: 18px; font-size: .85rem; color: var(--texte-doux); }
+.raisons li { margin-bottom: 2px; }
+.badges { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 6px; }
+.badge { font-size: .74rem; padding: 3px 7px; border-radius: 999px; background: var(--fond-doux); border: 1px solid var(--bord); }
+.heures { display: grid; grid-template-columns: repeat(14, 1fr); gap: 2px; margin-top: 12px; align-items: stretch; }
+.heures .colonne { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 0; }
+.heures .barre-zone { position: relative; height: 46px; width: 100%; display: flex; align-items: flex-end;
+                      border-bottom: 1px solid var(--bord); background: var(--fond-doux); border-radius: 2px 2px 0 0; }
+.heures .soleil-fond { position: absolute; left: 0; right: 0; bottom: 0; background: var(--cat-soleil); opacity: .55; }
+.heures .barre-pluie { position: relative; z-index: 1; width: 100%; background: var(--cat-moments); border-radius: 2px 2px 0 0; }
+.heures .h { font-size: .52rem; color: var(--texte-doux); }
+
+/* ---------- Graphique températures ---------- */
+.svg-boite { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.svg-boite svg { display: block; }
+.axe-texte { font-size: 10px; fill: var(--texte-doux); }
+.grille-ligne { stroke: var(--bord); stroke-width: 1; }
+.ligne-canicule { stroke: var(--chaud); stroke-width: 1; stroke-dasharray: 4 3; }
+
+/* ---------- Bilan ---------- */
+.chiffre-cle { font-size: 2.6rem; font-weight: 800; line-height: 1; letter-spacing: -.03em; }
+.chiffre-cle.sec { color: var(--cat-soleil); }
+.chiffre-cle.pluie { color: var(--cat-continue); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .chiffre-cle.pluie { color: var(--cat-eclaircies); } }
+.sous-chiffre { font-size: .85rem; color: var(--texte-doux); }
+.barre-empilee { display: flex; height: 26px; border-radius: 7px; overflow: hidden; margin: 10px 0 6px; background: var(--fond-doux); }
+.barre-empilee span { display: block; height: 100%; }
+.tableau { width: 100%; border-collapse: collapse; font-size: .85rem; }
+.tableau th, .tableau td { text-align: left; padding: 6px 4px; border-bottom: 1px solid var(--bord); }
+.tableau td.num, .tableau th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.compare-ligne { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.compare-ligne .nom { width: 6.5em; font-size: .8rem; flex: none; }
+.compare-ligne .barre-empilee { flex: 1; margin: 0; height: 20px; }
+
+/* ---------- Onglets ---------- */
+.onglets {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 30;
+  display: flex; background: var(--fond-carte);
+  border-top: 1px solid var(--bord);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.onglets button {
+  flex: 1; background: none; border: none; border-radius: 0;
+  padding: 8px 2px 10px; display: flex; flex-direction: column;
+  align-items: center; gap: 2px; font-size: .68rem; color: var(--texte-doux);
+  max-width: none;
+}
+.onglets button .ico { font-size: 1.25rem; line-height: 1; }
+.onglets button[aria-selected="true"] { color: var(--accent); font-weight: 600; }
+
+/* ---------- Divers ---------- */
+.methodo h3 { margin-top: 1.2em; }
+.methodo ul { padding-left: 18px; }
+.methodo li { margin-bottom: .35em; }
+.seuil { font-variant-numeric: tabular-nums; font-weight: 600; }
+.cat-ligne { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 9px; }
+.cat-ligne .pastille { width: 16px; height: 16px; margin-top: 2px; }
+.diag { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .74rem; white-space: pre-wrap; color: var(--texte-doux); }
+.attente { color: var(--texte-doux); font-size: .88rem; padding: 18px 0; text-align: center; }
+.visuellement-cache {
+  position: absolute; width: 1px; height: 1px; overflow: hidden;
+  clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap;
+}
+@media (min-width: 620px) {
+  .mosaique { gap: 3px; }
+  .chiffre-cle { font-size: 3.2rem; }
+}
+</style>
+</head>
+<body>
+
+<header class="entete">
+  <div class="entete-haut">
+    <div class="marque">Ploufplouf<span> · météo réelle</span></div>
+    <div class="selecteurs">
+      <select id="choix-ville" aria-label="Ville"></select>
+      <select id="choix-annee" aria-label="Année"></select>
+    </div>
+  </div>
+  <div class="progression" id="progression">
+    <div class="rail"><div class="jauge" id="jauge"></div></div>
+    <div class="libelle" id="progression-libelle"></div>
+  </div>
+</header>
+
+<div id="bandeaux"></div>
+
+<main>
+  <!-- ========== VUE 1 : CALENDRIER ========== -->
+  <section class="vue actif" id="vue-calendrier" aria-label="Calendrier">
+    <div class="carte">
+      <div class="rangee espace" style="margin-bottom:10px">
+        <div class="rangee" style="gap:6px">
+          <button id="btn-mode-annee" class="bouton-plat" aria-pressed="true">Année entière</button>
+          <button id="btn-mode-mois" class="bouton-plat" aria-pressed="false">Gros carreaux</button>
+        </div>
+        <label class="rangee" style="gap:5px;font-size:.8rem;color:var(--texte-doux)">
+          <input type="checkbox" id="bascule-chaleur" style="width:auto;padding:0">
+          Colorer par la chaleur
+        </label>
+      </div>
+
+      <div id="zone-annee">
+        <div class="mosaique" id="mosaique" role="group" aria-label="Mosaïque de l'année"></div>
+      </div>
+
+      <div id="zone-mois" hidden>
+        <div class="rangee espace" style="margin-bottom:8px">
+          <button class="bouton-plat" id="mois-precedent" aria-label="Mois précédent">‹</button>
+          <strong id="mois-titre"></strong>
+          <button class="bouton-plat" id="mois-suivant" aria-label="Mois suivant">›</button>
+        </div>
+        <div class="mois-grille" id="mois-grille"></div>
+      </div>
+
+      <div class="legende" id="legende"></div>
+    </div>
+
+    <div class="carte" id="detail-jour">
+      <div class="attente">Touche un jour pour voir le détail heure par heure.</div>
+    </div>
+  </section>
+
+  <!-- ========== VUE 2 : TEMPÉRATURES ========== -->
+  <section class="vue" id="vue-temperatures" aria-label="Températures">
+    <div class="carte">
+      <div class="rangee espace" style="margin-bottom:10px">
+        <h2 style="margin:0">Températures</h2>
+        <div class="rangee" style="gap:6px">
+          <button id="btn-temp-mois" class="bouton-plat" aria-pressed="true">Par mois</button>
+          <button id="btn-temp-jour" class="bouton-plat" aria-pressed="false">Par jour</button>
+        </div>
+      </div>
+      <div class="svg-boite" id="temp-boite"></div>
+      <p style="margin:10px 0 0"><small>Chaque barre va de la température la plus basse à la plus haute de la journée. Le trait rouge marque le seuil de canicule (35 °C). L'échelle est fixe, pour que deux villes se comparent d'un coup d'œil.</small></p>
+    </div>
+    <div class="carte">
+      <h3>Mois par mois</h3>
+      <div style="overflow-x:auto"><table class="tableau" id="table-temp"></table></div>
+    </div>
+  </section>
+
+  <!-- ========== VUE 3 : BILAN ========== -->
+  <section class="vue" id="vue-bilan" aria-label="Bilan">
+    <div class="carte">
+      <div class="rangee" style="gap:6px;margin-bottom:10px">
+        <select id="choix-periode" aria-label="Période">
+          <option value="annee">Année entière</option>
+          <option value="hiver">Octobre → mars</option>
+          <option value="ete">Juin → septembre</option>
+        </select>
+        <label class="rangee" style="gap:5px;font-size:.8rem;color:var(--texte-doux)">
+          <input type="checkbox" id="bascule-weekend" style="width:auto;padding:0">
+          Week-ends seulement
+        </label>
+      </div>
+      <div id="bilan-chiffres"></div>
+    </div>
+    <div class="carte">
+      <h3>Le détail des journées</h3>
+      <div id="bilan-repartition"></div>
+    </div>
+    <div class="carte">
+      <h3>Comparer les villes</h3>
+      <p><small>Chaque ville est chargée à la demande — touche son nom pour l'ajouter à la comparaison. Même période, mêmes règles, mêmes seuils.</small></p>
+      <div id="compare-boutons" class="legende" style="margin-bottom:12px"></div>
+      <div id="compare-resultat"></div>
+    </div>
+  </section>
+
+  <!-- ========== VUE 4 : MÉTHODOLOGIE ========== -->
+  <section class="vue methodo" id="vue-methodo" aria-label="Méthodologie">
+    <div class="carte">
+      <h2>Comment chaque journée est classée</h2>
+      <p>Cette application ne donne pas d'avis : elle applique les mêmes règles chiffrées à toutes les journées, et elle affiche les chiffres qui ont produit chaque verdict. Si un jour vous paraît mal classé, ouvrez-le : vous verrez exactement pourquoi.</p>
+
+      <h3>La règle d'or : la nuit ne compte pas</h3>
+      <p>Tout est mesuré entre <span class="seuil">7 h et 21 h</span>, heure locale. S'il pleut cinq heures pendant la nuit et que le soleil brille toute la journée, la journée est comptée comme ensoleillée. C'est le point de départ de toute la démarche : ce qui gêne, c'est la pluie qu'on prend, pas celle qui tombe sur les toits pendant qu'on dort.</p>
+
+      <h3>Quand est-ce qu'« il pleut » ?</h3>
+      <p>Une heure compte comme pluvieuse à partir de <span class="seuil" data-seuil="RAIN_HOUR_MM"></span> mm. En dessous, on parle d'humidité, pas de pluie : les données sont arrondies au dixième de millimètre, donc 0,1 mm est le plus petit chiffre non nul que l'échelle sache écrire — un bruit de mesure plutôt qu'une averse. Les modèles météo produisent en outre beaucoup de bruine très faible et très étalée ; sans ce seuil, la moitié des heures de novembre serait déclarée « pluvieuse » alors qu'aucun pluviomètre n'aurait bougé.</p>
+      <p>Ce seuil a un autre mérite : <span class="seuil" data-seuil="RAIN_HOUR_MM"></span> mm × 5 heures = 1 mm, ce qui est exactement la définition officielle du « jour de pluie » chez Météo-France et à l'Organisation météorologique mondiale.</p>
+
+      <h3>Le soleil se compte sur la durée du jour, pas sur 14 heures</h3>
+      <p>Le 21 décembre à Blanquefort, il fait jour de 8 h 41 à 17 h 20 : 8 h 39 dans notre fenêtre. Si l'on rapportait l'ensoleillement aux 14 heures de la fenêtre, une journée de ciel bleu absolu plafonnerait à 62 %, et <em>aucune journée d'hiver ne pourrait jamais être « grand soleil »</em>. Le pourcentage affiché est donc toujours : soleil mesuré ÷ durée du jour clair. 100 % un 21 décembre, c'est 8 h 39 de soleil ; un 21 juin, c'est 14 heures.</p>
+
+      <h3>Les sept catégories</h3>
+      <div id="methodo-categories"></div>
+
+      <h3>Les badges</h3>
+      <p>La chaleur et l'orage ne sont pas des catégories de ciel : une journée à 38 °C est presque toujours une journée de grand soleil. En faire une case à part retirerait les plus belles journées du compteur du beau temps. Ils sont donc affichés en plus, sous forme de badges :</p>
+      <div id="methodo-badges"></div>
+
+      <h3>D'où viennent les chiffres</h3>
+      <ul>
+        <li><strong>Open-Meteo</strong> — historique heure par heure aux coordonnées exactes de la ville choisie, gratuit et sans inscription. Données : <a href="https://open-meteo.com" target="_blank" rel="noopener">Open-Meteo.com</a>, licence CC-BY 4.0.</li>
+        <li>Les années passées viennent d'une <strong>réanalyse</strong> : des mesures réelles réassimilées après coup, ce qui en fait la meilleure source disponible. Les <strong>trois derniers mois</strong> viennent du modèle opérationnel et sont encore provisoires : un jour se fige définitivement au bout d'une semaine environ.</li>
+        <li>La station officielle la plus proche de Blanquefort est celle de <strong>Bordeaux-Mérignac</strong>, à environ 9 km. Ses relevés certifiés sont publics sur <a href="https://meteo.data.gouv.fr" target="_blank" rel="noopener">meteo.data.gouv.fr</a> et servent de référence pour vérifier ces chiffres.</li>
+      </ul>
+
+      <h3>Ce que cette application ne dit pas</h3>
+      <p>Elle classe le ciel et la pluie, pas le confort. Un 14 février à 9 °C, ciel bleu et 60 km/h de vent du nord-ouest sera compté « grand soleil ». Le vent et l'humidité ne sont pas pris en compte — les ajouter demanderait d'autres seuils, et rendrait le verdict beaucoup plus discutable.</p>
+
+      <h3>Vérification des données</h3>
+      <p><small>Ce panneau recalcule deux contrôles sur les données réellement reçues. Il sert à confirmer que les heures sont bien alignées.</small></p>
+      <div class="diag" id="diagnostic">—</div>
+      <div class="rangee" style="margin-top:12px;gap:8px">
+        <button id="btn-vider-cache">Vider le cache et tout recharger</button>
+      </div>
+      <p style="margin-top:12px"><small id="version-ligne"></small></p>
+    </div>
+  </section>
+</main>
+
+<nav class="onglets" role="tablist" aria-label="Navigation">
+  <button role="tab" aria-selected="true" data-vue="calendrier"><span class="ico">📅</span>Calendrier</button>
+  <button role="tab" aria-selected="false" data-vue="temperatures"><span class="ico">🌡️</span>Températures</button>
+  <button role="tab" aria-selected="false" data-vue="bilan"><span class="ico">📊</span>Bilan</button>
+  <button role="tab" aria-selected="false" data-vue="methodo"><span class="ico">📖</span>Méthode</button>
+</nav>
+
+<script>
+'use strict';
+/* ============================================================
+   Ploufplouf — application d'une seule page, sans dépendance.
+   Organisation du fichier :
+     1. Configuration et seuils
+     2. LOGIQUE PURE (testée depuis Node, cf. test/)
+     3. Stockage local
+     4. Accès à l'API Open-Meteo
+     5. Vues
+     6. Amorçage
+   ============================================================ */
+
+/* ---------- 1. CONFIGURATION ---------- */
+
+var VERSION = '1.0.0';
+var SCHEMA_VERSION = 1;   // format des mesures en cache : changer purge le cache
+var RULES_VERSION = 1;    // seuils de classification : changer recalcule sans retélécharger
+
+var VILLES = [
+  { id: 'blanquefort', nom: 'Blanquefort', dep: 'Gironde',        lat: 44.91, lon: -0.63 },
+  { id: 'bordeaux',    nom: 'Bordeaux',    dep: 'Gironde',        lat: 44.84, lon: -0.58 },
+  { id: 'paris',       nom: 'Paris',       dep: 'Paris',          lat: 48.85, lon:  2.35 },
+  { id: 'brest',       nom: 'Brest',       dep: 'Finistère',      lat: 48.39, lon: -4.49 },
+  { id: 'nice',        nom: 'Nice',        dep: 'Alpes-Maritimes',lat: 43.70, lon:  7.27 },
+  { id: 'lille',       nom: 'Lille',       dep: 'Nord',           lat: 50.63, lon:  3.06 }
+];
+
+var ANNEES_PAR_DEFAUT = 3;
+
+/* Fenêtre diurne. Open-Meteo horodate les cumuls à la FIN de l'heure couverte :
+   l'horodatage 08:00 décrit 07:00 → 08:00. La plage 7 h–21 h correspond donc
+   aux horodatages 8 à 21 inclus, soit 14 créneaux. Le panneau de diagnostic
+   vérifie cette convention sur les données réelles. */
+var CUMUL_EN_FIN_D_HEURE = true;
+var PREMIER_CRENEAU = CUMUL_EN_FIN_D_HEURE ? 8 : 7;
+var DERNIER_CRENEAU = CUMUL_EN_FIN_D_HEURE ? 21 : 20;
+var NB_CRENEAUX = DERNIER_CRENEAU - PREMIER_CRENEAU + 1;   // 14
+var HEURE_DEBUT = 7;    // bornes en heures pleines, pour la durée du jour
+var HEURE_FIN = 21;
+
+var SEUILS = {
+  RAIN_HOUR_MM: 0.2,       // une heure « compte » comme pluvieuse
+  DRY_DAY_MM: 0.2,         // « pas une goutte » sur la journée
+  LIGHT_DAY_MM: 1.0,       // le « moins de 1 mm » de la consigne
+  DRIZZLE_TOTAL_MM: 2.0,   // longtemps, mais très peu : crachin
+  CONTINUOUS_HOURS: 5,     // pluie toute la journée
+  SCATTERED_HOURS: 3,      // pluie par moments
+  SUN_FULL: 0.70,          // grand soleil
+  SUN_MIXED: 0.25,         // frontière éclaircies / gris
+  HEAVY_HOUR_MM: 8.0,      // badge grosse averse
+  HEAT_C: 35.0,            // canicule
+  WARM_C: 32.0,            // forte chaleur
+  FROST_C: 0.0,            // gel
+  MIN_SLOTS: 12            // créneaux renseignés exigés sur 14
+};
+
+var CATEGORIES = {
+  soleil:     { emo: '☀️',  nom: 'Grand soleil',         couleur: '#F5B301', rang: 1,
+                def: 'Pas une goutte entre 7 h et 21 h, et le soleil brille plus de {SUN_FULL} % de la durée du jour.' },
+  eclaircies: { emo: '⛅',  nom: 'Éclaircies',            couleur: '#9CC7E8', rang: 2,
+                def: 'Moins d’un millimètre en journée, et le soleil se montre entre {SUN_MIXED} % et {SUN_FULL} % du temps.' },
+  gris:       { emo: '🌥️', nom: 'Gris, mais sec',        couleur: '#B9BEC4', rang: 3,
+                def: 'Il n’a quasiment pas plu, mais le soleil est resté sous {SUN_MIXED} % : la journée grise dont personne ne se mouille.' },
+  averse:     { emo: '🌦️', nom: 'Averse passagère',      couleur: '#5B9BD5', rang: 4,
+                def: 'Plus d’un millimètre, concentré sur une ou deux heures. Dégagé le reste de la journée.' },
+  crachin:    { emo: '🌫️', nom: 'Crachin',                couleur: '#7E9BB5', rang: 5,
+                def: 'Cinq heures de pluie ou plus, mais moins de {DRIZZLE_TOTAL_MM} mm au total : il bruine, il ne pleut pas.' },
+  moments:    { emo: '🌧️', nom: 'Pluie par moments',     couleur: '#2E6DA4', rang: 6,
+                def: 'Trois ou quatre heures de pluie dans la journée, entrecoupées.' },
+  continue:   { emo: '☔',  nom: 'Pluie toute la journée',couleur: '#1B3F73', rang: 7,
+                def: 'Cinq heures de pluie ou plus, et plus de {DRIZZLE_TOTAL_MM} mm : le vrai temps gris et humide en continu.' },
+  inconnu:    { emo: '❔',  nom: 'Données manquantes',    couleur: '#e4e6e9', rang: 8,
+                def: 'Moins de {MIN_SLOTS} heures renseignées sur 14 : la journée est écartée de tous les compteurs.' }
+};
+
+var ORDRE_CATEGORIES = ['soleil', 'eclaircies', 'gris', 'averse', 'crachin', 'moments', 'continue', 'inconnu'];
+
+var BADGES = {
+  canicule: { emo: '🔥', nom: 'Canicule',        def: 'Température maximale d’au moins {HEAT_C} °C.' },
+  chaud:    { emo: '🥵', nom: 'Forte chaleur',   def: 'Entre {WARM_C} °C et {HEAT_C} °C.' },
+  gel:      { emo: '❄️', nom: 'Gel',             def: 'Température minimale au plus égale à {FROST_C} °C.' },
+  orage:    { emo: '⛈️', nom: 'Grosse averse',   def: 'Au moins {HEAVY_HOUR_MM} mm tombés en une seule heure.' },
+  gouttes:  { emo: '💧', nom: 'Quelques gouttes',def: 'Une trace de pluie, sous {LIGHT_DAY_MM} mm sur la journée.' }
+};
+
+var MOIS_NOMS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin',
+                 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+var MOIS_COURTS = ['jan', 'fév', 'mar', 'avr', 'mai', 'juin', 'juil', 'aoû', 'sep', 'oct', 'nov', 'déc'];
+var JOURS_COURTS = ['lun', 'mar', 'mer', 'jeu', 'ven', 'sam', 'dim'];
+
+/* ==================== BEGIN LOGIQUE PURE ====================
+   Tout ce qui suit est sans effet de bord et sans DOM : c'est
+   la partie extraite et testée par test/classification.test.mjs.
+   Ne pas déplacer les marqueurs BEGIN / END. */
+
+/* Nombre de jours d'un mois, sans passer par Date (donc sans fuseau). */
+function joursDansMois(annee, mois1a12) {
+  var n = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][mois1a12 - 1];
+  if (mois1a12 === 2 && ((annee % 4 === 0 && annee % 100 !== 0) || annee % 400 === 0)) n = 29;
+  return n;
+}
+
+/* 'AAAA-MM-JJ' -> jour de la semaine, 0 = lundi. Algorithme de Sakamoto,
+   purement arithmétique : aucun objet Date, donc aucun fuseau horaire. */
+function jourSemaine(dateStr) {
+  var a = +dateStr.slice(0, 4), m = +dateStr.slice(5, 7), j = +dateStr.slice(8, 10);
+  var t = [0, 3, 2, 5, 0, 3, 5, 1, 4, 6, 2, 4];
+  if (m < 3) a -= 1;
+  var dim0 = (a + Math.floor(a / 4) - Math.floor(a / 100) + Math.floor(a / 400) + t[m - 1] + j) % 7;
+  return (dim0 + 6) % 7;
+}
+
+/* '2024-06-21T06:14' ou '06:14' -> minutes depuis minuit. */
+function minutesDepuisMinuit(iso) {
+  if (typeof iso !== 'string') return null;
+  var i = iso.indexOf('T');
+  var hhmm = i >= 0 ? iso.slice(i + 1) : iso;
+  var h = +hhmm.slice(0, 2), m = +hhmm.slice(3, 5);
+  if (!isFinite(h) || !isFinite(m)) return null;
+  return h * 60 + m;
+}
+
+/* Durée de jour clair contenue dans la fenêtre 7 h–21 h, en minutes. */
+function dureeJourDansFenetre(leverIso, coucherIso) {
+  var lever = minutesDepuisMinuit(leverIso);
+  var coucher = minutesDepuisMinuit(coucherIso);
+  if (lever === null || coucher === null) return null;
+  return Math.max(0, Math.min(coucher, HEURE_FIN * 60) - Math.max(lever, HEURE_DEBUT * 60));
+}
+
+/* Regroupe les tableaux horaires par jour local.
+   Indispensable : on lit la CHAÎNE de l'horodatage, jamais un index calculé.
+   Les 31 mars et 27 octobre ont 23 et 25 heures ; toute arithmétique
+   d'index se décalerait à partir de fin mars et fausserait toute l'année. */
+function grouperHeuresParJour(horaire) {
+  var parJour = Object.create(null);
+  if (!horaire || !horaire.time) return parJour;
+  var temps = horaire.time;
+  var pluie = horaire.precipitation || [];
+  var soleil = horaire.sunshine_duration || [];
+  var nuages = horaire.cloud_cover || [];
+  for (var i = 0; i < temps.length; i++) {
+    var t = temps[i];
+    if (typeof t !== 'string' || t.length < 13) continue;
+    var date = t.slice(0, 10);
+    var heure = +t.slice(11, 13);
+    var jour = parJour[date];
+    if (!jour) {
+      jour = parJour[date] = {
+        date: date,
+        pluie: new Array(NB_CRENEAUX).fill(null),
+        soleil: new Array(NB_CRENEAUX).fill(null),
+        nuages: new Array(NB_CRENEAUX).fill(null),
+        pluie24: 0,
+        heuresVues: 0,
+        premiereHeureSoleil: null
+      };
+    }
+    jour.heuresVues++;
+    var p = pluie[i];
+    if (typeof p === 'number') jour.pluie24 += p;
+    var s = soleil[i];
+    if (typeof s === 'number' && s > 0 && jour.premiereHeureSoleil === null) jour.premiereHeureSoleil = heure;
+    if (heure < PREMIER_CRENEAU || heure > DERNIER_CRENEAU) continue;
+    var k = heure - PREMIER_CRENEAU;
+    jour.pluie[k] = (typeof p === 'number') ? p : null;
+    jour.soleil[k] = (typeof s === 'number') ? s : null;
+    jour.nuages[k] = (typeof nuages[i] === 'number') ? nuages[i] : null;
+  }
+  return parJour;
+}
+
+/* Transforme un jour brut + sa ligne quotidienne en mesures compactes.
+   Un null n'est JAMAIS traité comme un zéro : un trou de données deviendrait
+   sinon une journée sèche, ce qui fausserait le compteur dans le bon sens
+   pour la thèse — donc exactement ce qu'il ne faut pas faire. */
+function calculerMesures(jour, ligneQuotidienne, estAujourdhui) {
+  var q = ligneQuotidienne || {};
+  var creneauxRenseignes = 0;
+  var pluieDixiemes = new Array(NB_CRENEAUX);
+  var soleilMinutes = new Array(NB_CRENEAUX);
+  var sommeNuages = 0, nbNuages = 0;
+  var soleilConnu = false;
+  for (var k = 0; k < NB_CRENEAUX; k++) {
+    var p = jour.pluie[k];
+    if (typeof p === 'number') { creneauxRenseignes++; pluieDixiemes[k] = Math.round(p * 10); }
+    else pluieDixiemes[k] = null;
+    var s = jour.soleil[k];
+    if (typeof s === 'number') { soleilMinutes[k] = Math.round(s / 60); soleilConnu = true; }
+    else soleilMinutes[k] = null;
+    var n = jour.nuages[k];
+    if (typeof n === 'number') { sommeNuages += n; nbNuages++; }
+  }
+  var dureeJour = dureeJourDansFenetre(q.sunrise, q.sunset);
+  var nuagesMoyens = nbNuages ? Math.round(sommeNuages / nbNuages) : null;
+  return {
+    date: jour.date,
+    pluieDixiemes: pluieDixiemes,
+    soleilMinutes: soleilConnu ? soleilMinutes : null,
+    nuagesMoyens: nuagesMoyens,
+    tmax: (typeof q.tmax === 'number') ? q.tmax : null,
+    tmin: (typeof q.tmin === 'number') ? q.tmin : null,
+    dureeJourMin: dureeJour,
+    creneaux: creneauxRenseignes,
+    estime: !soleilConnu,
+    partiel: !!estAujourdhui,
+    pluie24: jour.pluie24,
+    premiereHeureSoleil: jour.premiereHeureSoleil,
+    pluieSomme24Api: (typeof q.precipitation_sum === 'number') ? q.precipitation_sum : null
+  };
+}
+
+/* Grandeurs dérivées, en unités lisibles. Séparé de la classification
+   pour que les tests puissent vérifier les deux indépendamment. */
+function deriver(mesures) {
+  var total = 0, heuresPluie = 0, maxHoraire = 0;
+  for (var k = 0; k < NB_CRENEAUX; k++) {
+    var d = mesures.pluieDixiemes[k];
+    if (d === null || d === undefined) continue;
+    var mm = d / 10;
+    total += mm;
+    if (mm >= SEUILS.RAIN_HOUR_MM) heuresPluie++;
+    if (mm > maxHoraire) maxHoraire = mm;
+  }
+  var fractionSoleil = null, minutesSoleil = null;
+  if (mesures.soleilMinutes) {
+    minutesSoleil = 0;
+    for (var j = 0; j < NB_CRENEAUX; j++) {
+      var s = mesures.soleilMinutes[j];
+      if (typeof s === 'number') minutesSoleil += s;
+    }
+    if (mesures.dureeJourMin) fractionSoleil = Math.min(1, minutesSoleil / mesures.dureeJourMin);
+  } else if (typeof mesures.nuagesMoyens === 'number') {
+    // Repli quand l'ensoleillement manque : estimation par la nébulosité.
+    fractionSoleil = Math.max(0, Math.min(1, 1 - mesures.nuagesMoyens / 100));
+  }
+  return {
+    pluieTotale: Math.round(total * 10) / 10,
+    heuresPluie: heuresPluie,
+    maxHoraire: maxHoraire,
+    fractionSoleil: fractionSoleil,
+    minutesSoleil: minutesSoleil
+  };
+}
+
+/* L'arbre de décision. Règles ordonnées : la première vraie l'emporte.
+   Exhaustif par construction — R1/R2 épuisent heuresPluie >= 5, R3 les
+   valeurs 3 et 4, et les trois intervalles de pluieTotale qui suivent
+   (>= 1, < 0,2, entre les deux) couvrent le reste sans recouvrement. */
+function classerJour(mesures) {
+  var d = deriver(mesures);
+  var raisons = [];
+  var badges = [];
+
+  if (mesures.creneaux < SEUILS.MIN_SLOTS) {
+    return { categorie: 'inconnu', badges: [], derive: d,
+             raisons: ['Seulement ' + mesures.creneaux + ' heures renseignées sur ' + NB_CRENEAUX + ' entre 7 h et 21 h.'] };
+  }
+
+  var categorie;
+  if (d.heuresPluie >= SEUILS.CONTINUOUS_HOURS) {
+    categorie = (d.pluieTotale < SEUILS.DRIZZLE_TOTAL_MM) ? 'crachin' : 'continue';
+  } else if (d.heuresPluie >= SEUILS.SCATTERED_HOURS) {
+    categorie = 'moments';
+  } else if (d.pluieTotale >= SEUILS.LIGHT_DAY_MM) {
+    categorie = 'averse';
+  } else if (d.pluieTotale < SEUILS.DRY_DAY_MM && d.fractionSoleil !== null && d.fractionSoleil >= SEUILS.SUN_FULL) {
+    categorie = 'soleil';
+  } else if (d.fractionSoleil !== null && d.fractionSoleil >= SEUILS.SUN_MIXED) {
+    categorie = 'eclaircies';
+  } else {
+    categorie = 'gris';
+  }
+
+  raisons.push(d.heuresPluie === 0
+    ? 'Pas une heure de pluie entre 7 h et 21 h.'
+    : d.heuresPluie + (d.heuresPluie > 1 ? ' heures de pluie' : ' heure de pluie') + ' entre 7 h et 21 h.');
+  raisons.push(d.pluieTotale === 0
+    ? 'Rien dans le pluviomètre sur la journée.'
+    : formaterMm(d.pluieTotale) + ' tombés en journée.');
+  if (d.fractionSoleil !== null && mesures.dureeJourMin) {
+    raisons.push('Soleil : ' + formaterDuree(d.minutesSoleil !== null ? d.minutesSoleil : Math.round(d.fractionSoleil * mesures.dureeJourMin))
+      + ' sur ' + formaterDuree(mesures.dureeJourMin) + ' de jour, soit ' + Math.round(d.fractionSoleil * 100) + ' %.'
+      + (mesures.estime ? ' (estimé d’après la nébulosité)' : ''));
+  }
+
+  if (typeof mesures.tmax === 'number') {
+    if (mesures.tmax >= SEUILS.HEAT_C) badges.push('canicule');
+    else if (mesures.tmax >= SEUILS.WARM_C) badges.push('chaud');
+  }
+  if (typeof mesures.tmin === 'number' && mesures.tmin <= SEUILS.FROST_C) badges.push('gel');
+  if (d.maxHoraire >= SEUILS.HEAVY_HOUR_MM) badges.push('orage');
+  if (d.pluieTotale >= SEUILS.DRY_DAY_MM && d.pluieTotale < SEUILS.LIGHT_DAY_MM) badges.push('gouttes');
+
+  return { categorie: categorie, badges: badges, raisons: raisons, derive: d };
+}
+
+function formaterMm(mm) {
+  return (Math.round(mm * 10) / 10).toString().replace('.', ',') + ' mm';
+}
+
+function formaterDuree(minutes) {
+  if (minutes === null || minutes === undefined) return '—';
+  var h = Math.floor(minutes / 60), m = Math.round(minutes % 60);
+  if (h === 0) return m + ' min';
+  return h + ' h' + (m ? ' ' + (m < 10 ? '0' + m : m) : '');
+}
+
+/* Encodage compact pour le cache : une ligne par jour, ~85 octets.
+   On garde les MESURES, jamais l'étiquette : changer un seuil doit
+   pouvoir se rejouer sans retélécharger trois ans de données. */
+function encoderJour(m) {
+  var nb = function (v) { return (v === null || v === undefined) ? 'x' : String(v); };
+  return [
+    m.date.slice(5),
+    m.pluieDixiemes.map(nb).join(','),
+    m.soleilMinutes ? m.soleilMinutes.map(nb).join(',') : 'x',
+    nb(m.nuagesMoyens),
+    nb(m.tmax === null ? null : Math.round(m.tmax * 10)),
+    nb(m.tmin === null ? null : Math.round(m.tmin * 10)),
+    nb(m.dureeJourMin),
+    nb(m.creneaux),
+    (m.partiel ? 'p' : '') + (m.estime ? 'e' : '')
+  ].join('|');
+}
+
+function decoderJour(ligne, annee) {
+  try {
+    var c = ligne.split('|');
+    if (c.length < 9) return null;
+    var val = function (s) { return s === 'x' ? null : Number(s); };
+    var liste = function (s) {
+      if (s === 'x') return null;
+      var t = s.split(','), out = new Array(NB_CRENEAUX);
+      for (var i = 0; i < NB_CRENEAUX; i++) out[i] = (t[i] === undefined || t[i] === 'x') ? null : Number(t[i]);
+      return out;
+    };
+    var pluie = liste(c[1]);
+    if (!pluie) return null;
+    var d = val(c[6]), tmax = val(c[4]), tmin = val(c[5]);
+    return {
+      date: annee + '-' + c[0],
+      pluieDixiemes: pluie,
+      soleilMinutes: liste(c[2]),
+      nuagesMoyens: val(c[3]),
+      tmax: tmax === null ? null : tmax / 10,
+      tmin: tmin === null ? null : tmin / 10,
+      dureeJourMin: d,
+      creneaux: val(c[7]) || 0,
+      partiel: c[8].indexOf('p') >= 0,
+      estime: c[8].indexOf('e') >= 0
+    };
+  } catch (e) { return null; }
+}
+
+/* Fusion archive + jours récents.
+   L'archive l'emporte TOUJOURS sur la zone de recouvrement : elle vient
+   d'une réanalyse, alors que le bloc récent vient du modèle opérationnel.
+   Faire gagner « le plus récent » ferait changer la couleur d'un jour
+   déjà affiché d'une visite à l'autre — le pire défaut de confiance
+   possible pour une application dont le seul argument est sa crédibilité. */
+function fusionnerJours(joursArchive, joursRecents, finArchive) {
+  var out = Object.create(null);
+  var d;
+  for (d in joursArchive) out[d] = joursArchive[d];
+  for (d in joursRecents) {
+    if (d <= finArchive && out[d]) continue;
+    out[d] = joursRecents[d];
+  }
+  return out;
+}
+
+/* Compteurs sur une période. Les journées partielles et les journées
+   sans données sont exclues, et le dénominateur affiché est le nombre
+   de jours RÉELLEMENT mesurés — jamais 365. */
+function calculerBilan(jours, filtre) {
+  var comptes = {}, i;
+  for (i = 0; i < ORDRE_CATEGORIES.length; i++) comptes[ORDRE_CATEGORIES[i]] = 0;
+  var mesures = 0, ecartes = 0, mmTotal = 0, minutesSoleil = 0, joursSecs = 0;
+  var canicule = 0, gel = 0, jourPluieOmm = 0;
+  var dates = Object.keys(jours).sort();
+  for (i = 0; i < dates.length; i++) {
+    var m = jours[dates[i]];
+    if (filtre && !filtre(dates[i])) continue;
+    if (m.partiel) { ecartes++; continue; }
+    var v = classerJour(m);
+    if (v.categorie === 'inconnu') { comptes.inconnu++; ecartes++; continue; }
+    comptes[v.categorie]++;
+    mesures++;
+    mmTotal += v.derive.pluieTotale;
+    if (v.derive.minutesSoleil !== null) minutesSoleil += v.derive.minutesSoleil;
+    if (v.derive.pluieTotale < SEUILS.DRY_DAY_MM) joursSecs++;
+    if (v.derive.pluieTotale >= 1) jourPluieOmm++;
+    if (v.badges.indexOf('canicule') >= 0) canicule++;
+    if (v.badges.indexOf('gel') >= 0) gel++;
+  }
+  return {
+    comptes: comptes, mesures: mesures, ecartes: ecartes,
+    mmTotal: Math.round(mmTotal * 10) / 10,
+    heuresSoleil: Math.round(minutesSoleil / 60),
+    joursSecs: joursSecs,
+    joursPluieOmm: jourPluieOmm,
+    joursBeaux: comptes.soleil + comptes.eclaircies,
+    joursVraiePluie: comptes.continue,
+    canicule: canicule, gel: gel
+  };
+}
+
+/* ==================== END LOGIQUE PURE ==================== */
+
+/* ---------- 3. STOCKAGE LOCAL ----------
+   localStorage jette dès le premier accès dans plusieurs situations
+   parfaitement ordinaires : navigation privée, cookies bloqués, page
+   ouverte en fichier local sous certains navigateurs. Tout passe donc
+   par cette enveloppe, qui bascule en mémoire sans jamais interrompre
+   l'affichage — les données sont déjà en RAM de toute façon. */
+
+var Stock = (function () {
+  var prefixe = 'plouf:v' + SCHEMA_VERSION + ':';
+  var memoire = Object.create(null);
+  var disponible = false;
+  try {
+    window.localStorage.setItem(prefixe + 'test', '1');
+    window.localStorage.removeItem(prefixe + 'test');
+    disponible = true;
+  } catch (e) { disponible = false; }
+
+  function lire(cle) {
+    if (!disponible) return memoire[cle] === undefined ? null : memoire[cle];
+    try { return window.localStorage.getItem(prefixe + cle); } catch (e) { return null; }
+  }
+  function ecrire(cle, valeur) {
+    memoire[cle] = valeur;
+    if (!disponible) return false;
+    try {
+      window.localStorage.setItem(prefixe + cle, valeur);
+      return true;
+    } catch (e) {
+      // Quota plein : on purge les années les plus anciennes puis on réessaie une fois.
+      purgerAnciennes();
+      try { window.localStorage.setItem(prefixe + cle, valeur); return true; }
+      catch (e2) { return false; }
+    }
+  }
+  function effacer(cle) {
+    delete memoire[cle];
+    if (!disponible) return;
+    try { window.localStorage.removeItem(prefixe + cle); } catch (e) {}
+  }
+  function toutesLesCles() {
+    if (!disponible) return Object.keys(memoire);
+    var out = [];
+    try {
+      for (var i = 0; i < window.localStorage.length; i++) {
+        var k = window.localStorage.key(i);
+        if (k && k.indexOf(prefixe) === 0) out.push(k.slice(prefixe.length));
+      }
+    } catch (e) {}
+    return out;
+  }
+  function purgerAnciennes() {
+    var cles = toutesLesCles().filter(function (k) { return k.indexOf('agg:') === 0; });
+    cles.sort();   // l'année est en fin de clé : l'ordre alphabétique met les plus vieilles devant
+    for (var i = 0; i < Math.ceil(cles.length / 3); i++) effacer(cles[i]);
+  }
+  function purgerVersionsPerimees() {
+    if (!disponible) return;
+    try {
+      var aSupprimer = [];
+      for (var i = 0; i < window.localStorage.length; i++) {
+        var k = window.localStorage.key(i);
+        if (k && /^plouf:v(\d+):/.test(k) && k.indexOf(prefixe) !== 0) aSupprimer.push(k);
+      }
+      for (var j = 0; j < aSupprimer.length; j++) window.localStorage.removeItem(aSupprimer[j]);
+    } catch (e) {}
+  }
+  function toutVider() {
+    var cles = toutesLesCles();
+    for (var i = 0; i < cles.length; i++) effacer(cles[i]);
+    memoire = Object.create(null);
+  }
+  return { lire: lire, ecrire: ecrire, effacer: effacer, cles: toutesLesCles,
+           purgerVersionsPerimees: purgerVersionsPerimees, toutVider: toutVider,
+           disponible: function () { return disponible; } };
+})();
+
+function clefVille(ville) { return ville.lat.toFixed(2) + '_' + ville.lon.toFixed(2); }
+
+function lirePrefs() {
+  try { return JSON.parse(Stock.lire('prefs') || '{}') || {}; } catch (e) { return {}; }
+}
+function ecrirePrefs(p) { Stock.ecrire('prefs', JSON.stringify(p)); }
+
+function lireVillesPerso() {
+  try { return JSON.parse(Stock.lire('villes') || '[]') || []; } catch (e) { return []; }
+}
+
+/* Sérialisation d'une année : entête + une ligne par jour. */
+function serialiserAnnee(jours, annee, meta) {
+  var lignes = [];
+  var dates = Object.keys(jours).sort();
+  for (var i = 0; i < dates.length; i++) {
+    if (dates[i].slice(0, 4) !== String(annee)) continue;
+    lignes.push(encoderJour(jours[dates[i]]));
+  }
+  return JSON.stringify({ t: Date.now(), lat: meta.lat, lon: meta.lon }) + '\n' + lignes.join('\n');
+}
+
+function deserialiserAnnee(brut, annee) {
+  if (!brut) return null;
+  var coupe = brut.indexOf('\n');
+  if (coupe < 0) return null;
+  var entete;
+  try { entete = JSON.parse(brut.slice(0, coupe)); } catch (e) { return null; }
+  var lignes = brut.slice(coupe + 1).split('\n');
+  var jours = Object.create(null), valides = 0, total = 0;
+  for (var i = 0; i < lignes.length; i++) {
+    if (!lignes[i]) continue;
+    total++;
+    var m = decoderJour(lignes[i], annee);
+    if (m) { jours[m.date] = m; valides++; }
+  }
+  // Cache abîmé (mise à jour interrompue, version antérieure) : on le jette.
+  if (total === 0 || valides / total < 0.9) return null;
+  return { jours: jours, entete: entete };
+}
+
+/* ---------- 4. ACCÈS À L'API OPEN-METEO ---------- */
+
+var API_ARCHIVE = 'https://archive-api.open-meteo.com/v1/archive';
+var API_PREVISION = 'https://api.open-meteo.com/v1/forecast';
+var API_GEOCODAGE = 'https://geocoding-api.open-meteo.com/v1/search';
+var HORAIRE = 'precipitation,sunshine_duration,cloud_cover';
+var QUOTIDIEN = 'temperature_2m_max,temperature_2m_min,sunrise,sunset,precipitation_sum';
+var FUSEAU = 'Europe%2FParis';
+var JOURS_RECENTS = 92;
+var MARGE_ARCHIVE = 7;   // l'archive accuse ~5 jours de retard ; on en prend 7
+
+function dateISO(d) {
+  var m = d.getMonth() + 1, j = d.getDate();
+  return d.getFullYear() + '-' + (m < 10 ? '0' : '') + m + '-' + (j < 10 ? '0' : '') + j;
+}
+function aujourdhuiISO() { return dateISO(new Date()); }
+function decalerJours(iso, n) {
+  var d = new Date(Date.UTC(+iso.slice(0, 4), +iso.slice(5, 7) - 1, +iso.slice(8, 10)));
+  d.setUTCDate(d.getUTCDate() + n);
+  var m = d.getUTCMonth() + 1, j = d.getUTCDate();
+  return d.getUTCFullYear() + '-' + (m < 10 ? '0' : '') + m + '-' + (j < 10 ? '0' : '') + j;
+}
+function finArchive() { return decalerJours(aujourdhuiISO(), -MARGE_ARCHIVE); }
+
+function urlArchive(ville, annee) {
+  var debut = annee + '-01-01';
+  var fin = annee + '-12-31';
+  var limite = finArchive();
+  if (fin > limite) fin = limite;
+  if (debut > fin) return null;
+  return API_ARCHIVE + '?latitude=' + ville.lat + '&longitude=' + ville.lon +
+    '&start_date=' + debut + '&end_date=' + fin +
+    '&hourly=' + HORAIRE + '&daily=' + QUOTIDIEN + '&timezone=' + FUSEAU;
+}
+function urlRecent(ville) {
+  return API_PREVISION + '?latitude=' + ville.lat + '&longitude=' + ville.lon +
+    '&past_days=' + JOURS_RECENTS + '&forecast_days=1' +
+    '&hourly=' + HORAIRE + '&daily=' + QUOTIDIEN + '&timezone=' + FUSEAU;
+}
+function urlGeocodage(nom) {
+  return API_GEOCODAGE + '?name=' + encodeURIComponent(nom) + '&count=8&language=fr&format=json';
+}
+
+function chargerJson(url, essaisRestants) {
+  if (essaisRestants === undefined) essaisRestants = 2;
+  var controleur = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+  var minuteur = setTimeout(function () { if (controleur) controleur.abort(); }, 20000);
+  var options = controleur ? { signal: controleur.signal } : {};
+  return fetch(url, options).then(function (r) {
+    clearTimeout(minuteur);
+    if (!r.ok) {
+      var err = new Error('Le serveur météo a répondu ' + r.status + '.');
+      err.statut = r.status;
+      throw err;
+    }
+    return r.json();
+  }).catch(function (e) {
+    clearTimeout(minuteur);
+    var reessayable = !e.statut || e.statut === 429 || e.statut >= 500;
+    if (essaisRestants > 0 && reessayable) {
+      var attente = (3 - essaisRestants) * 1600 + 800;
+      return new Promise(function (res) { setTimeout(res, attente); })
+        .then(function () { return chargerJson(url, essaisRestants - 1); });
+    }
+    e.url = url;
+    throw e;
+  });
+}
+
+/* Transforme une réponse Open-Meteo en dictionnaire date -> mesures. */
+function reponseVersJours(reponse, aujourdhui) {
+  var parJour = grouperHeuresParJour(reponse.hourly);
+  var quotidien = Object.create(null);
+  var q = reponse.daily;
+  if (q && q.time) {
+    for (var i = 0; i < q.time.length; i++) {
+      quotidien[q.time[i]] = {
+        tmax: q.temperature_2m_max ? q.temperature_2m_max[i] : null,
+        tmin: q.temperature_2m_min ? q.temperature_2m_min[i] : null,
+        sunrise: q.sunrise ? q.sunrise[i] : null,
+        sunset: q.sunset ? q.sunset[i] : null,
+        precipitation_sum: q.precipitation_sum ? q.precipitation_sum[i] : null
+      };
+    }
+  }
+  var out = Object.create(null);
+  for (var date in parJour) {
+    if (date > aujourdhui) continue;          // on ne montre pas de prévisions
+    out[date] = calculerMesures(parJour[date], quotidien[date], date === aujourdhui);
+  }
+  return out;
+}
+
+/* Charge une ville sur N années. Progression annoncée par étape nommée :
+   un pourcentage d'octets mentirait de toute façon (Content-Length gzip). */
+function chargerVille(ville, annees, surProgres) {
+  var cle = clefVille(ville);
+  var aujourdhui = aujourdhuiISO();
+  var anneeCourante = +aujourdhui.slice(0, 4);
+  var etapes = annees.length + 1;
+  var faites = 0;
+  var jours = Object.create(null);
+  var avertissements = [];
+  var coordsApi = null;
+  var diagnostic = null;
+
+  function avancer(libelle) {
+    faites++;
+    if (surProgres) surProgres({ fait: faites, total: etapes, libelle: libelle });
+  }
+
+  var chaine = Promise.resolve();
+  annees.forEach(function (annee) {
+    chaine = chaine.then(function () {
+      var cleAnnee = 'agg:' + cle + ':' + annee;
+      var cache = deserialiserAnnee(Stock.lire(cleAnnee), annee);
+      var fraicheurOk = cache && (annee < anneeCourante || (Date.now() - (cache.entete.t || 0)) < 12 * 3600 * 1000);
+      if (cache && fraicheurOk) {
+        Object.assign(jours, cache.jours);
+        if (cache.entete.lat) coordsApi = { lat: cache.entete.lat, lon: cache.entete.lon };
+        avancer(ville.nom + ' — ' + annee + ' (mémoire)');
+        return;
+      }
+      var url = urlArchive(ville, annee);
+      if (!url) { avancer(ville.nom + ' — ' + annee); return; }
+      return chargerJson(url).then(function (rep) {
+        var nouveaux = reponseVersJours(rep, aujourdhui);
+        Object.assign(jours, nouveaux);
+        coordsApi = { lat: rep.latitude, lon: rep.longitude };
+        if (!diagnostic) diagnostic = construireDiagnostic(rep, nouveaux);
+        Stock.ecrire(cleAnnee, serialiserAnnee(nouveaux, annee, { lat: rep.latitude, lon: rep.longitude }));
+        avancer(ville.nom + ' — ' + annee);
+      }, function (e) {
+        avertissements.push({ annee: annee, message: e.message, url: e.url });
+        if (cache) Object.assign(jours, cache.jours);
+        avancer(ville.nom + ' — ' + annee + ' (échec)');
+      });
+    });
+  });
+
+  chaine = chaine.then(function () {
+    var cleRecent = 'rec:' + cle;
+    var brut = Stock.lire(cleRecent);
+    var cache = brut ? deserialiserAnneeMulti(brut) : null;
+    if (cache && (Date.now() - (cache.entete.t || 0)) < 3 * 3600 * 1000) {
+      fusionnerDansJours(jours, cache.jours);
+      avancer(ville.nom + ' — jours récents (mémoire)');
+      return;
+    }
+    return chargerJson(urlRecent(ville)).then(function (rep) {
+      var recents = reponseVersJours(rep, aujourdhui);
+      fusionnerDansJours(jours, recents);
+      coordsApi = { lat: rep.latitude, lon: rep.longitude };
+      if (!diagnostic) diagnostic = construireDiagnostic(rep, recents);
+      Stock.ecrire(cleRecent, serialiserMulti(recents, { lat: rep.latitude, lon: rep.longitude }));
+      avancer(ville.nom + ' — jours récents');
+    }, function (e) {
+      avertissements.push({ annee: 'récent', message: e.message, url: e.url });
+      if (cache) fusionnerDansJours(jours, cache.jours);
+      avancer(ville.nom + ' — jours récents (échec)');
+    });
+  });
+
+  return chaine.then(function () {
+    return { jours: jours, avertissements: avertissements, coordsApi: coordsApi, diagnostic: diagnostic };
+  });
+}
+
+/* Le bloc « récent » chevauche deux années civiles : il a son propre
+   format, avec la date complète sur chaque ligne. */
+function serialiserMulti(jours, meta) {
+  var lignes = [];
+  var dates = Object.keys(jours).sort();
+  for (var i = 0; i < dates.length; i++) {
+    lignes.push(dates[i].slice(0, 4) + '#' + encoderJour(jours[dates[i]]));
+  }
+  return JSON.stringify({ t: Date.now(), lat: meta.lat, lon: meta.lon }) + '\n' + lignes.join('\n');
+}
+function deserialiserAnneeMulti(brut) {
+  var coupe = brut.indexOf('\n');
+  if (coupe < 0) return null;
+  var entete;
+  try { entete = JSON.parse(brut.slice(0, coupe)); } catch (e) { return null; }
+  var jours = Object.create(null);
+  var lignes = brut.slice(coupe + 1).split('\n');
+  for (var i = 0; i < lignes.length; i++) {
+    if (!lignes[i]) continue;
+    var sep = lignes[i].indexOf('#');
+    if (sep < 0) continue;
+    var m = decoderJour(lignes[i].slice(sep + 1), lignes[i].slice(0, sep));
+    if (m) jours[m.date] = m;
+  }
+  return { jours: jours, entete: entete };
+}
+
+/* L'archive fait foi sur la zone de recouvrement (85 jours). */
+function fusionnerDansJours(cible, recents) {
+  var limite = finArchive();
+  for (var d in recents) {
+    if (d <= limite && cible[d]) continue;
+    cible[d] = recents[d];
+  }
+}
+
+/* Les deux contrôles que l'on ne peut faire que sur des données réelles :
+   l'alignement des journées, et la convention d'horodatage des cumuls. */
+function construireDiagnostic(reponse, jours) {
+  var dates = Object.keys(jours).sort();
+  var echantillon = [], i;
+  for (i = dates.length - 1; i >= 0 && echantillon.length < 40; i--) {
+    var m = jours[dates[i]];
+    if (!m.partiel && m.creneaux === NB_CRENEAUX) echantillon.push(m);
+  }
+  var ecartMax = 0, compares = 0;
+  for (i = 0; i < echantillon.length; i++) {
+    var m2 = echantillon[i];
+    if (typeof m2.pluieSomme24Api !== 'number' || typeof m2.pluie24 !== 'number') continue;
+    compares++;
+    var ecart = Math.abs(m2.pluie24 - m2.pluieSomme24Api);
+    if (ecart > ecartMax) ecartMax = ecart;
+  }
+  var decalages = {}, examines = 0;
+  var q = reponse.daily;
+  if (q && q.time) {
+    for (i = 0; i < q.time.length && examines < 40; i++) {
+      var jour = jours[q.time[i]];
+      if (!jour || jour.premiereHeureSoleil === null) continue;
+      var lever = minutesDepuisMinuit(q.sunrise ? q.sunrise[i] : null);
+      if (lever === null) continue;
+      var dec = jour.premiereHeureSoleil - Math.floor(lever / 60);
+      decalages[dec] = (decalages[dec] || 0) + 1;
+      examines++;
+    }
+  }
+  var decalageDominant = null, meilleur = 0;
+  for (var k in decalages) if (decalages[k] > meilleur) { meilleur = decalages[k]; decalageDominant = +k; }
+  return {
+    ecartMax: Math.round(ecartMax * 100) / 100,
+    compares: compares,
+    decalage: decalageDominant,
+    examines: examines
+  };
+}
+
+/* ---------- 5. ÉTAT ET VUES ---------- */
+
+var Etat = {
+  ville: VILLES[0],
+  annee: new Date().getFullYear(),
+  vue: 'calendrier',
+  jours: Object.create(null),
+  modeCalendrier: 'annee',
+  moisAffiche: new Date().getMonth() + 1,
+  jourSelection: null,
+  colorerChaleur: false,
+  filtreCategorie: null,
+  modeTemp: 'mois',
+  periode: 'annee',
+  weekendSeul: false,
+  villes: VILLES.slice(),
+  cacheVilles: Object.create(null),
+  comparees: [],
+  diagnostic: null,
+  chargement: false
+};
+
+function el(id) { return document.getElementById(id); }
+function vider(noeud) { while (noeud.firstChild) noeud.removeChild(noeud.firstChild); }
+function creer(balise, classe, texte) {
+  var n = document.createElement(balise);
+  if (classe) n.className = classe;
+  if (texte !== undefined && texte !== null) n.textContent = texte;
+  return n;
+}
+function nombreFr(n) { return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ' '); }
+function dateEnFrancais(iso) {
+  var j = +iso.slice(8, 10), m = +iso.slice(5, 7), a = iso.slice(0, 4);
+  return JOURS_LONGS[jourSemaine(iso)] + ' ' + (j === 1 ? '1er' : j) + ' ' + MOIS_NOMS[m - 1] + ' ' + a;
+}
+var JOURS_LONGS = ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi', 'dimanche'];
+
+function couleurJour(mesures) {
+  if (!mesures) return null;
+  if (Etat.colorerChaleur) return couleurChaleur(mesures.tmax);
+  return CATEGORIES[classerJour(mesures).categorie].couleur;
+}
+
+/* Dégradé bleu → rouge, bornes fixes pour que deux villes se comparent. */
+function couleurChaleur(tmax) {
+  if (typeof tmax !== 'number') return CATEGORIES.inconnu.couleur;
+  var paliers = [
+    { t: -5, c: [ 52,  96, 160] },
+    { t:  5, c: [120, 168, 210] },
+    { t: 15, c: [214, 226, 200] },
+    { t: 25, c: [242, 186,  92] },
+    { t: 32, c: [222, 118,  60] },
+    { t: 40, c: [178,  34,  52] }
+  ];
+  if (tmax <= paliers[0].t) return rgb(paliers[0].c);
+  for (var i = 1; i < paliers.length; i++) {
+    if (tmax <= paliers[i].t) {
+      var a = paliers[i - 1], b = paliers[i];
+      var f = (tmax - a.t) / (b.t - a.t);
+      return rgb([
+        Math.round(a.c[0] + (b.c[0] - a.c[0]) * f),
+        Math.round(a.c[1] + (b.c[1] - a.c[1]) * f),
+        Math.round(a.c[2] + (b.c[2] - a.c[2]) * f)
+      ]);
+    }
+  }
+  return rgb(paliers[paliers.length - 1].c);
+}
+function rgb(c) { return 'rgb(' + c[0] + ',' + c[1] + ',' + c[2] + ')'; }
+
+/* ----- Mosaïque annuelle ----- */
+function rendreMosaique() {
+  var grille = el('mosaique');
+  vider(grille);
+  var entete = creer('div', 'mois-nom', '');
+  grille.appendChild(entete);
+  for (var d = 1; d <= 31; d++) {
+    grille.appendChild(creer('div', 'jour-num', (d === 1 || d % 5 === 0) ? String(d) : ''));
+  }
+  for (var mois = 1; mois <= 12; mois++) {
+    grille.appendChild(creer('div', 'mois-nom', MOIS_COURTS[mois - 1]));
+    var nb = joursDansMois(Etat.annee, mois);
+    for (var jour = 1; jour <= 31; jour++) {
+      if (jour > nb) { grille.appendChild(creer('div', 'case vide')); continue; }
+      var iso = Etat.annee + '-' + (mois < 10 ? '0' : '') + mois + '-' + (jour < 10 ? '0' : '') + jour;
+      var m = Etat.jours[iso];
+      var bouton = document.createElement('button');
+      bouton.className = 'case';
+      bouton.dataset.date = iso;
+      if (!m) {
+        bouton.className += ' absent';
+        bouton.setAttribute('aria-label', iso + ' — pas de données');
+      } else {
+        var verdict = classerJour(m);
+        bouton.style.background = couleurJour(m);
+        if (m.partiel) bouton.className += ' partiel';
+        if (Etat.filtreCategorie && verdict.categorie !== Etat.filtreCategorie) bouton.className += ' attenue';
+        bouton.setAttribute('aria-label', dateEnFrancais(iso) + ' — ' + CATEGORIES[verdict.categorie].nom);
+      }
+      if (iso === Etat.jourSelection) bouton.className += ' selection';
+      grille.appendChild(bouton);
+    }
+  }
+}
+
+/* ----- Grille mensuelle (gros carreaux) ----- */
+function rendreMois() {
+  el('mois-titre').textContent = MOIS_NOMS[Etat.moisAffiche - 1] + ' ' + Etat.annee;
+  var grille = el('mois-grille');
+  vider(grille);
+  for (var i = 0; i < 7; i++) grille.appendChild(creer('div', 'entete-jour', JOURS_COURTS[i]));
+  var premier = Etat.annee + '-' + (Etat.moisAffiche < 10 ? '0' : '') + Etat.moisAffiche + '-01';
+  var decalage = jourSemaine(premier);
+  for (var v = 0; v < decalage; v++) grille.appendChild(creer('div', 'gros-case vide'));
+  var nb = joursDansMois(Etat.annee, Etat.moisAffiche);
+  for (var jour = 1; jour <= nb; jour++) {
+    var iso = Etat.annee + '-' + (Etat.moisAffiche < 10 ? '0' : '') + Etat.moisAffiche + '-' + (jour < 10 ? '0' : '') + jour;
+    var m = Etat.jours[iso];
+    var bouton = document.createElement('button');
+    bouton.className = 'gros-case';
+    bouton.dataset.date = iso;
+    if (iso === Etat.jourSelection) bouton.className += ' selection';
+    var num = creer('div', 'num', String(jour));
+    var emo = creer('div', 'emo', m ? CATEGORIES[classerJour(m).categorie].emo : '·');
+    if (m) {
+      var categorieJour = classerJour(m).categorie;
+      // Sur les cases les plus foncées, le numéro du jour doit passer en blanc.
+      if (!Etat.colorerChaleur && ['crachin', 'moments', 'continue'].indexOf(categorieJour) >= 0) bouton.className += ' sombre';
+      else if (Etat.colorerChaleur && typeof m.tmax === 'number' && (m.tmax <= 2 || m.tmax >= 30)) bouton.className += ' sombre';
+      bouton.style.background = couleurJour(m);
+      if (m.partiel) bouton.className += ' partiel';
+      bouton.setAttribute('aria-label', dateEnFrancais(iso) + ' — ' + CATEGORIES[classerJour(m).categorie].nom);
+    } else {
+      bouton.className += ' absent';
+    }
+    bouton.appendChild(num);
+    bouton.appendChild(emo);
+    grille.appendChild(bouton);
+  }
+}
+
+/* ----- Légende cliquable ----- */
+function rendreLegende() {
+  var zone = el('legende');
+  vider(zone);
+  ORDRE_CATEGORIES.forEach(function (id) {
+    if (id === 'inconnu') return;
+    var compte = 0;
+    for (var d in Etat.jours) {
+      if (d.slice(0, 4) !== String(Etat.annee)) continue;
+      var m = Etat.jours[d];
+      if (m.partiel) continue;
+      if (classerJour(m).categorie === id) compte++;
+    }
+    var b = document.createElement('button');
+    b.setAttribute('aria-pressed', Etat.filtreCategorie === id ? 'true' : 'false');
+    b.dataset.categorie = id;
+    var p = creer('span', 'pastille');
+    p.style.background = CATEGORIES[id].couleur;
+    b.appendChild(p);
+    b.appendChild(document.createTextNode(CATEGORIES[id].nom + ' · ' + compte));
+    zone.appendChild(b);
+  });
+}
+
+/* ----- Détail d'une journée ----- */
+function rendreDetail(iso) {
+  var boite = el('detail-jour');
+  vider(boite);
+  var m = Etat.jours[iso];
+  if (!m) {
+    boite.appendChild(creer('div', 'attente', 'Aucune donnée pour le ' + dateEnFrancais(iso) + '.'));
+    return;
+  }
+  var verdict = classerJour(m);
+  var cat = CATEGORIES[verdict.categorie];
+
+  boite.appendChild(creer('div', 'detail-titre', dateEnFrancais(iso)));
+
+  var ligne = creer('div', 'verdict');
+  ligne.appendChild(creer('span', 'emo', cat.emo));
+  var bloc = creer('div');
+  bloc.appendChild(creer('div', 'nom', cat.nom + (m.partiel ? ' (jour en cours)' : '')));
+  var temps = '';
+  if (typeof m.tmin === 'number' && typeof m.tmax === 'number') {
+    temps = 'de ' + Math.round(m.tmin) + ' °C à ' + Math.round(m.tmax) + ' °C';
+  }
+  bloc.appendChild(creer('div', 'sous-chiffre', temps));
+  ligne.appendChild(bloc);
+  boite.appendChild(ligne);
+
+  if (verdict.badges.length) {
+    var zoneBadges = creer('div', 'badges');
+    verdict.badges.forEach(function (b) {
+      zoneBadges.appendChild(creer('span', 'badge', BADGES[b].emo + ' ' + BADGES[b].nom));
+    });
+    boite.appendChild(zoneBadges);
+  }
+
+  var ul = creer('ul', 'raisons');
+  verdict.raisons.forEach(function (r) { ul.appendChild(creer('li', null, r)); });
+  if (m.partiel) ul.appendChild(creer('li', null, 'Journée encore en cours : elle n’entre dans aucun compteur.'));
+  boite.appendChild(ul);
+
+  // Les 14 heures, en barres.
+  var heures = creer('div', 'heures');
+  var maxPluie = 1;
+  for (var k = 0; k < NB_CRENEAUX; k++) {
+    var d = m.pluieDixiemes[k];
+    if (typeof d === 'number' && d / 10 > maxPluie) maxPluie = d / 10;
+  }
+  for (var i = 0; i < NB_CRENEAUX; i++) {
+    var col = creer('div', 'colonne');
+    var zone = creer('div', 'barre-zone');
+    // Fond jaune : la part ensoleillée de l'heure. Barre bleue par-dessus : la pluie.
+    var minutes = m.soleilMinutes ? m.soleilMinutes[i] : null;
+    var fondSoleil = creer('div', 'soleil-fond');
+    fondSoleil.style.height = (typeof minutes === 'number' ? Math.round(minutes / 60 * 100) : 0) + '%';
+    zone.appendChild(fondSoleil);
+    var mm = (typeof m.pluieDixiemes[i] === 'number') ? m.pluieDixiemes[i] / 10 : null;
+    var barre = creer('div', 'barre-pluie');
+    barre.style.height = (mm === null ? 0 : Math.max(mm > 0 ? 2 : 0, Math.round(mm / maxPluie * 46))) + 'px';
+    zone.appendChild(barre);
+    col.appendChild(zone);
+    var debutHeure = PREMIER_CRENEAU + i - (CUMUL_EN_FIN_D_HEURE ? 1 : 0);
+    col.appendChild(creer('div', 'h', (i % 2 === 0) ? String(debutHeure) + 'h' : '\u00a0'));
+    col.title = debutHeure + 'h–' + (debutHeure + 1) + 'h : ' +
+      (mm === null ? 'pas de donnée' : formaterMm(mm)) +
+      (typeof minutes === 'number' ? ', ' + minutes + ' min de soleil' : '');
+    heures.appendChild(col);
+  }
+  boite.appendChild(heures);
+  var aPlu = verdict.derive.pluieTotale > 0;
+  boite.appendChild(creer('p', null, '')).appendChild(
+    creer('small', null,
+      (aPlu ? 'Barres bleues : pluie tombée dans l’heure, la plus haute vaut ' + formaterMm(maxPluie) + '. '
+            : 'Aucune pluie entre 7 h et 21 h ce jour-là. ') +
+      'Fond jaune : part de l’heure ensoleillée. Seule la plage 7 h–21 h est représentée.'));
+}
+
+/* ----- Températures (SVG écrit à la main, aucune bibliothèque) ----- */
+var TEMP_MIN = -8, TEMP_MAX = 44;
+
+function rendreTemperatures() {
+  var boite = el('temp-boite');
+  vider(boite);
+  var parMois = statistiquesMensuelles();
+  boite.appendChild(Etat.modeTemp === 'mois' ? svgMensuel(parMois) : svgQuotidien());
+  rendreTableTemperatures(parMois);
+}
+
+function statistiquesMensuelles() {
+  var out = [];
+  for (var mois = 1; mois <= 12; mois++) {
+    var sommeMax = 0, sommeMin = 0, n = 0, recordMax = null, recordMin = null, jourRecordMax = null, jourRecordMin = null;
+    var nb = joursDansMois(Etat.annee, mois);
+    for (var j = 1; j <= nb; j++) {
+      var iso = Etat.annee + '-' + (mois < 10 ? '0' : '') + mois + '-' + (j < 10 ? '0' : '') + j;
+      var m = Etat.jours[iso];
+      if (!m || typeof m.tmax !== 'number' || typeof m.tmin !== 'number') continue;
+      sommeMax += m.tmax; sommeMin += m.tmin; n++;
+      if (recordMax === null || m.tmax > recordMax) { recordMax = m.tmax; jourRecordMax = iso; }
+      if (recordMin === null || m.tmin < recordMin) { recordMin = m.tmin; jourRecordMin = iso; }
+    }
+    out.push({ mois: mois, n: n,
+      moyenneMax: n ? sommeMax / n : null, moyenneMin: n ? sommeMin / n : null,
+      recordMax: recordMax, recordMin: recordMin,
+      jourRecordMax: jourRecordMax, jourRecordMin: jourRecordMin });
+  }
+  return out;
+}
+
+function svgNoeud(nom, attributs) {
+  var n = document.createElementNS('http://www.w3.org/2000/svg', nom);
+  for (var k in attributs) n.setAttribute(k, attributs[k]);
+  return n;
+}
+
+function echelleY(t, hauteur, hautMarge, basMarge) {
+  return hauteur - basMarge - (t - TEMP_MIN) / (TEMP_MAX - TEMP_MIN) * (hauteur - hautMarge - basMarge);
+}
+
+function fondSvg(largeur, hauteur, margeGauche) {
+  var H = hauteur, hautMarge = 12, basMarge = 22;
+  var g = svgNoeud('g', {});
+  [0, 10, 20, 30].forEach(function (t) {
+    var y = echelleY(t, H, hautMarge, basMarge);
+    g.appendChild(svgNoeud('line', { x1: margeGauche, y1: y, x2: largeur, y2: y, class: 'grille-ligne' }));
+    var txt = svgNoeud('text', { x: 2, y: y + 3, class: 'axe-texte' });
+    txt.textContent = t + '°';
+    g.appendChild(txt);
+  });
+  var yc = echelleY(SEUILS.HEAT_C, H, hautMarge, basMarge);
+  g.appendChild(svgNoeud('line', { x1: margeGauche, y1: yc, x2: largeur, y2: yc, class: 'ligne-canicule' }));
+  var tc = svgNoeud('text', { x: 2, y: yc + 3, class: 'axe-texte' });
+  tc.textContent = '35°';
+  g.appendChild(tc);
+  return g;
+}
+
+function svgMensuel(parMois) {
+  var largeur = 360, hauteur = 240, margeGauche = 24, hautMarge = 12, basMarge = 22;
+  var svg = svgNoeud('svg', { viewBox: '0 0 ' + largeur + ' ' + hauteur, width: '100%',
+                              height: hauteur, role: 'img',
+                              'aria-label': 'Températures moyennes et records mois par mois' });
+  svg.appendChild(fondSvg(largeur, hauteur, margeGauche));
+  var dispo = largeur - margeGauche - 4;
+  var pas = dispo / 12;
+  var largeurBarre = Math.max(6, pas - 8);
+  parMois.forEach(function (m, i) {
+    var x = margeGauche + i * pas + (pas - largeurBarre) / 2;
+    var etiquette = svgNoeud('text', { x: x + largeurBarre / 2, y: hauteur - 6, class: 'axe-texte', 'text-anchor': 'middle' });
+    etiquette.textContent = MOIS_COURTS[i].slice(0, 1).toUpperCase();
+    svg.appendChild(etiquette);
+    if (!m.n) return;
+    // Amplitude des records, en trait fin.
+    var yRecMax = echelleY(m.recordMax, hauteur, hautMarge, basMarge);
+    var yRecMin = echelleY(m.recordMin, hauteur, hautMarge, basMarge);
+    svg.appendChild(svgNoeud('line', { x1: x + largeurBarre / 2, y1: yRecMax, x2: x + largeurBarre / 2, y2: yRecMin,
+                                       stroke: 'currentColor', 'stroke-opacity': .28, 'stroke-width': 1 }));
+    // Barre des moyennes.
+    var yMax = echelleY(m.moyenneMax, hauteur, hautMarge, basMarge);
+    var yMin = echelleY(m.moyenneMin, hauteur, hautMarge, basMarge);
+    var rect = svgNoeud('rect', { x: x, y: yMax, width: largeurBarre, height: Math.max(2, yMin - yMax),
+                                  rx: 3, fill: couleurChaleur(m.moyenneMax) });
+    var titre = svgNoeud('title', {});
+    titre.textContent = MOIS_NOMS[i] + ' : en moyenne de ' + Math.round(m.moyenneMin) + ' °C à ' +
+      Math.round(m.moyenneMax) + ' °C. Records : ' + Math.round(m.recordMin) + ' °C et ' + Math.round(m.recordMax) + ' °C.';
+    rect.appendChild(titre);
+    svg.appendChild(rect);
+  });
+  return svg;
+}
+
+function svgQuotidien() {
+  var dates = [];
+  for (var mois = 1; mois <= 12; mois++) {
+    var nb = joursDansMois(Etat.annee, mois);
+    for (var j = 1; j <= nb; j++) {
+      dates.push(Etat.annee + '-' + (mois < 10 ? '0' : '') + mois + '-' + (j < 10 ? '0' : '') + j);
+    }
+  }
+  var margeGauche = 24, pas = 4, hauteur = 240, hautMarge = 12, basMarge = 22;
+  var largeur = margeGauche + dates.length * pas + 6;
+  var svg = svgNoeud('svg', { viewBox: '0 0 ' + largeur + ' ' + hauteur, width: largeur,
+                              height: hauteur, role: 'img',
+                              'aria-label': 'Températures jour par jour' });
+  svg.appendChild(fondSvg(largeur, hauteur, margeGauche));
+  var moisCourant = 0;
+  dates.forEach(function (iso, i) {
+    var mois = +iso.slice(5, 7);
+    if (mois !== moisCourant) {
+      moisCourant = mois;
+      var x0 = margeGauche + i * pas;
+      svg.appendChild(svgNoeud('line', { x1: x0, y1: hautMarge, x2: x0, y2: hauteur - basMarge,
+                                         class: 'grille-ligne' }));
+      var t = svgNoeud('text', { x: x0 + 3, y: hauteur - 6, class: 'axe-texte' });
+      t.textContent = MOIS_COURTS[mois - 1];
+      svg.appendChild(t);
+    }
+    var m = Etat.jours[iso];
+    if (!m || typeof m.tmax !== 'number' || typeof m.tmin !== 'number') return;
+    var yMax = echelleY(m.tmax, hauteur, hautMarge, basMarge);
+    var yMin = echelleY(m.tmin, hauteur, hautMarge, basMarge);
+    var rect = svgNoeud('rect', { x: margeGauche + i * pas, y: yMax, width: pas - 1,
+                                  height: Math.max(1, yMin - yMax), fill: couleurChaleur(m.tmax) });
+    var titre = svgNoeud('title', {});
+    titre.textContent = dateEnFrancais(iso) + ' : de ' + Math.round(m.tmin) + ' °C à ' + Math.round(m.tmax) + ' °C';
+    rect.appendChild(titre);
+    svg.appendChild(rect);
+  });
+  return svg;
+}
+
+function rendreTableTemperatures(parMois) {
+  var table = el('table-temp');
+  vider(table);
+  var thead = creer('thead');
+  var tr = creer('tr');
+  ['Mois', 'Min moy.', 'Max moy.', 'Record bas', 'Record haut'].forEach(function (t, i) {
+    var th = creer('th', i ? 'num' : null, t);
+    tr.appendChild(th);
+  });
+  thead.appendChild(tr);
+  table.appendChild(thead);
+  var tbody = creer('tbody');
+  parMois.forEach(function (m, i) {
+    var ligne = creer('tr');
+    ligne.appendChild(creer('td', null, MOIS_NOMS[i]));
+    if (!m.n) {
+      var vide = creer('td', 'num', '—');
+      vide.colSpan = 4;
+      ligne.appendChild(vide);
+    } else {
+      ligne.appendChild(creer('td', 'num', Math.round(m.moyenneMin) + ' °C'));
+      ligne.appendChild(creer('td', 'num', Math.round(m.moyenneMax) + ' °C'));
+      ligne.appendChild(creer('td', 'num', Math.round(m.recordMin) + ' °C'));
+      ligne.appendChild(creer('td', 'num', Math.round(m.recordMax) + ' °C'));
+    }
+    tbody.appendChild(ligne);
+  });
+  table.appendChild(tbody);
+}
+
+/* ----- Bilan ----- */
+function filtrePeriode() {
+  var periode = Etat.periode, weekend = Etat.weekendSeul, annee = String(Etat.annee);
+  return function (iso) {
+    if (iso.slice(0, 4) !== annee) return false;
+    var mois = +iso.slice(5, 7);
+    if (periode === 'hiver' && !(mois >= 10 || mois <= 3)) return false;
+    if (periode === 'ete' && !(mois >= 6 && mois <= 9)) return false;
+    if (weekend && jourSemaine(iso) < 5) return false;
+    return true;
+  };
+}
+
+function libellePeriode() {
+  var base = Etat.periode === 'hiver' ? 'd’octobre à mars ' + Etat.annee
+           : Etat.periode === 'ete' ? 'de juin à septembre ' + Etat.annee
+           : 'en ' + Etat.annee;
+  return base + (Etat.weekendSeul ? ', week-ends seulement' : '');
+}
+
+function rendreBilan() {
+  var bilan = calculerBilan(Etat.jours, filtrePeriode());
+  var zone = el('bilan-chiffres');
+  vider(zone);
+
+  if (!bilan.mesures) {
+    zone.appendChild(creer('div', 'attente', 'Aucune journée mesurée sur cette période.'));
+    vider(el('bilan-repartition'));
+    return;
+  }
+
+  var pourcentSec = Math.round(bilan.joursSecs / bilan.mesures * 100);
+  zone.appendChild(creer('div', 'chiffre-cle sec', bilan.joursSecs + ' jours'));
+  zone.appendChild(creer('div', null, 'sans une goutte entre 7 h et 21 h à ' + Etat.ville.nom + ' ' + libellePeriode() +
+    ' — soit ' + pourcentSec + ' % des ' + bilan.mesures + ' journées mesurées.'));
+
+  var bloc = creer('div');
+  bloc.style.marginTop = '16px';
+  bloc.appendChild(creer('div', 'chiffre-cle pluie', bilan.joursVraiePluie + ' jours'));
+  bloc.appendChild(creer('div', null, 'de pluie du matin au soir (cinq heures de pluie ou plus). ' +
+    (bilan.joursVraiePluie === 0 ? 'Aucune sur la période.'
+      : 'Soit environ une journée sur ' + Math.round(bilan.mesures / bilan.joursVraiePluie) + '.')));
+  zone.appendChild(bloc);
+
+  var complement = creer('p', 'sous-chiffre');
+  complement.style.marginTop = '14px';
+  complement.textContent = 'Sur la même période : ' + nombreFr(Math.round(bilan.mmTotal)) + ' mm d’eau au total en journée, ' +
+    nombreFr(bilan.heuresSoleil) + ' heures de soleil, ' +
+    bilan.canicule + (bilan.canicule > 1 ? ' jours' : ' jour') + ' de canicule et ' +
+    bilan.gel + (bilan.gel > 1 ? ' jours' : ' jour') + ' de gel.' +
+    (bilan.ecartes ? ' ' + bilan.ecartes + (bilan.ecartes > 1 ? ' journées écartées' : ' journée écartée') +
+      ' (en cours ou données incomplètes).' : '');
+  zone.appendChild(complement);
+
+  var repartition = el('bilan-repartition');
+  vider(repartition);
+  repartition.appendChild(barreEmpilee(bilan));
+  var table = creer('table', 'tableau');
+  var tbody = creer('tbody');
+  ORDRE_CATEGORIES.forEach(function (id) {
+    if (id === 'inconnu' || !bilan.comptes[id]) return;
+    var tr = creer('tr');
+    var tdNom = creer('td');
+    var p = creer('span', 'pastille');
+    p.style.background = CATEGORIES[id].couleur;
+    p.style.display = 'inline-block';
+    p.style.marginRight = '6px';
+    p.style.verticalAlign = 'middle';
+    tdNom.appendChild(p);
+    tdNom.appendChild(document.createTextNode(CATEGORIES[id].emo + ' ' + CATEGORIES[id].nom));
+    tr.appendChild(tdNom);
+    tr.appendChild(creer('td', 'num', String(bilan.comptes[id])));
+    tr.appendChild(creer('td', 'num', Math.round(bilan.comptes[id] / bilan.mesures * 100) + ' %'));
+    tbody.appendChild(tr);
+  });
+  table.appendChild(tbody);
+  repartition.appendChild(table);
+
+  var note = creer('p', 'sous-chiffre');
+  note.style.marginTop = '10px';
+  note.textContent = 'Rappel utile pour la discussion : ce qui fait la réputation d’une ville, ' +
+    'ce n’est pas le nombre de jours de pluie mais la quantité d’eau. Beaucoup d’eau tombée en peu de fois ' +
+    'donne un total annuel élevé et un ciel pourtant souvent dégagé.';
+  repartition.appendChild(note);
+}
+
+function barreEmpilee(bilan) {
+  var barre = creer('div', 'barre-empilee');
+  ORDRE_CATEGORIES.forEach(function (id) {
+    if (id === 'inconnu' || !bilan.comptes[id]) return;
+    var part = creer('span');
+    part.style.width = (bilan.comptes[id] / bilan.mesures * 100) + '%';
+    part.style.background = CATEGORIES[id].couleur;
+    part.title = CATEGORIES[id].nom + ' : ' + bilan.comptes[id] + ' jours';
+    barre.appendChild(part);
+  });
+  return barre;
+}
+
+/* ----- Comparaison entre villes ----- */
+function rendreBoutonsComparaison() {
+  var zone = el('compare-boutons');
+  vider(zone);
+  Etat.villes.forEach(function (v) {
+    var b = document.createElement('button');
+    b.dataset.villeId = v.id;
+    b.setAttribute('aria-pressed', Etat.comparees.indexOf(v.id) >= 0 ? 'true' : 'false');
+    b.textContent = v.nom;
+    zone.appendChild(b);
+  });
+}
+
+function rendreComparaison() {
+  var zone = el('compare-resultat');
+  vider(zone);
+  if (!Etat.comparees.length) {
+    zone.appendChild(creer('div', 'attente', 'Choisis au moins une ville ci-dessus.'));
+    return;
+  }
+  var lignes = [];
+  var maillesIdentiques = Object.create(null);
+  Etat.comparees.forEach(function (id) {
+    var entree = Etat.cacheVilles[id];
+    if (!entree) return;
+    var bilan = calculerBilan(entree.jours, filtrePeriode());
+    if (!bilan.mesures) return;
+    var ville = trouverVille(id);
+    var maille = entree.coordsApi ? entree.coordsApi.lat + ',' + entree.coordsApi.lon : id;
+    (maillesIdentiques[maille] = maillesIdentiques[maille] || []).push(ville.nom);
+    lignes.push({ ville: ville, bilan: bilan, maille: maille });
+  });
+  lignes.sort(function (a, b) {
+    return (b.bilan.joursSecs / b.bilan.mesures) - (a.bilan.joursSecs / a.bilan.mesures);
+  });
+
+  lignes.forEach(function (l) {
+    var ligne = creer('div', 'compare-ligne');
+    ligne.appendChild(creer('div', 'nom', l.ville.nom));
+    ligne.appendChild(barreEmpilee(l.bilan));
+    var chiffre = creer('div', 'sous-chiffre', Math.round(l.bilan.joursSecs / l.bilan.mesures * 100) + ' %');
+    chiffre.style.width = '3em';
+    chiffre.style.textAlign = 'right';
+    chiffre.style.flex = 'none';
+    ligne.appendChild(chiffre);
+    zone.appendChild(ligne);
+  });
+
+  var table = creer('table', 'tableau');
+  var thead = creer('thead'), trh = creer('tr');
+  ['Ville', 'Jours secs', 'Pluie continue', 'Eau (mm)', 'Soleil (h)'].forEach(function (t, i) {
+    trh.appendChild(creer('th', i ? 'num' : null, t));
+  });
+  thead.appendChild(trh);
+  table.appendChild(thead);
+  var tbody = creer('tbody');
+  lignes.forEach(function (l) {
+    var tr = creer('tr');
+    tr.appendChild(creer('td', null, l.ville.nom));
+    tr.appendChild(creer('td', 'num', l.bilan.joursSecs + ' / ' + l.bilan.mesures));
+    tr.appendChild(creer('td', 'num', String(l.bilan.joursVraiePluie)));
+    tr.appendChild(creer('td', 'num', nombreFr(Math.round(l.bilan.mmTotal))));
+    tr.appendChild(creer('td', 'num', nombreFr(l.bilan.heuresSoleil)));
+    tbody.appendChild(tr);
+  });
+  table.appendChild(tbody);
+  zone.appendChild(table);
+
+  // Deux villes voisines tombent souvent dans la même maille du modèle :
+  // sans cet avertissement, deux colonnes identiques passeraient pour un bug.
+  for (var maille in maillesIdentiques) {
+    if (maillesIdentiques[maille].length > 1) {
+      var note = creer('p', 'sous-chiffre');
+      note.style.marginTop = '10px';
+      note.textContent = maillesIdentiques[maille].join(' et ') +
+        ' tombent dans la même maille de mesure du modèle (quelques kilomètres) : ' +
+        'leurs chiffres sont identiques, et c’est normal.';
+      zone.appendChild(note);
+    }
+  }
+}
+
+function trouverVille(id) {
+  for (var i = 0; i < Etat.villes.length; i++) if (Etat.villes[i].id === id) return Etat.villes[i];
+  return null;
+}
+
+function chargerVillePourComparaison(id) {
+  var ville = trouverVille(id);
+  if (!ville) return Promise.resolve();
+  if (Etat.cacheVilles[id]) return Promise.resolve();
+  return chargerVille(ville, anneesACharger(), majProgression).then(function (res) {
+    Etat.cacheVilles[id] = res;
+  });
+}
+
+/* ----- Méthodologie ----- */
+function texteSeuils(modele) {
+  return modele.replace(/\{(\w+)\}/g, function (tout, cle) {
+    if (cle === 'SUN_FULL' || cle === 'SUN_MIXED') return String(Math.round(SEUILS[cle] * 100));
+    var v = SEUILS[cle];
+    return v === undefined ? tout : String(v).replace('.', ',');
+  });
+}
+
+function rendreMethodo() {
+  var noeuds = document.querySelectorAll('[data-seuil]');
+  for (var i = 0; i < noeuds.length; i++) {
+    var cle = noeuds[i].getAttribute('data-seuil');
+    noeuds[i].textContent = String(SEUILS[cle]).replace('.', ',');
+  }
+  var zoneCat = el('methodo-categories');
+  vider(zoneCat);
+  ORDRE_CATEGORIES.forEach(function (id) {
+    var c = CATEGORIES[id];
+    var ligne = creer('div', 'cat-ligne');
+    var p = creer('span', 'pastille');
+    p.style.background = c.couleur;
+    ligne.appendChild(p);
+    var bloc = creer('div');
+    bloc.appendChild(creer('strong', null, c.emo + ' ' + c.nom));
+    bloc.appendChild(creer('div', 'sous-chiffre', texteSeuils(c.def)));
+    ligne.appendChild(bloc);
+    zoneCat.appendChild(ligne);
+  });
+  var zoneBadges = el('methodo-badges');
+  vider(zoneBadges);
+  for (var b in BADGES) {
+    var ligne2 = creer('div', 'cat-ligne');
+    ligne2.appendChild(creer('span', null, BADGES[b].emo));
+    var bloc2 = creer('div');
+    bloc2.appendChild(creer('strong', null, BADGES[b].nom));
+    bloc2.appendChild(creer('div', 'sous-chiffre', texteSeuils(BADGES[b].def)));
+    ligne2.appendChild(bloc2);
+    zoneBadges.appendChild(ligne2);
+  }
+  el('version-ligne').textContent = 'Ploufplouf ' + VERSION +
+    ' · règles version ' + RULES_VERSION + ' · format des mesures version ' + SCHEMA_VERSION +
+    ' · mémoire du navigateur : ' + (Stock.disponible() ? 'disponible' : 'indisponible, les données seront rechargées à chaque ouverture');
+  rendreDiagnostic();
+}
+
+function rendreDiagnostic() {
+  var zone = el('diagnostic');
+  var d = Etat.diagnostic;
+  if (!d) { zone.textContent = 'En attente d’un chargement depuis le réseau (les données en mémoire ne permettent pas ce contrôle).'; return; }
+  var lignes = [];
+  lignes.push('1. Cumul horaire vs cumul quotidien de l’API');
+  lignes.push('   écart maximal : ' + d.ecartMax + ' mm sur ' + d.compares + ' journées');
+  lignes.push('   ' + (d.ecartMax <= 0.2 ? '→ les journées sont correctement découpées.'
+                                         : '→ ÉCART ANORMAL : le découpage des journées est à revoir.'));
+  lignes.push('');
+  lignes.push('2. Première heure ensoleillée vs lever du soleil');
+  lignes.push('   décalage dominant : ' + (d.decalage === null ? 'inconnu' : '+' + d.decalage + ' h') +
+              ' sur ' + d.examines + ' journées');
+  if (d.decalage === 1) {
+    lignes.push('   → les cumuls sont bien horodatés en fin d’heure,');
+    lignes.push('     la fenêtre 7 h–21 h est correctement alignée.');
+  } else if (d.decalage === 0) {
+    lignes.push('   → les cumuls semblent horodatés en DÉBUT d’heure :');
+    lignes.push('     passer CUMUL_EN_FIN_D_HEURE à false dans le code.');
+  } else {
+    lignes.push('   → résultat inattendu, à examiner.');
+  }
+  zone.textContent = lignes.join('\n');
+}
+
+/* ---------- 6. AMORÇAGE ---------- */
+
+function anneesACharger() {
+  var courante = new Date().getFullYear();
+  var prefs = lirePrefs();
+  var n = prefs.profondeur || ANNEES_PAR_DEFAUT;
+  var out = [];
+  for (var i = 0; i < n; i++) out.push(courante - i);
+  return out.sort();
+}
+
+function majProgression(p) {
+  var barre = el('progression');
+  if (!p) { barre.classList.remove('actif'); return; }
+  barre.classList.add('actif');
+  el('jauge').style.width = Math.round(p.fait / p.total * 100) + '%';
+  el('progression-libelle').textContent = p.libelle + ' — ' + p.fait + '/' + p.total;
+}
+
+function ajouterBandeau(classe, titre, texte, actions) {
+  var zone = el('bandeaux');
+  var b = creer('div', 'bandeau ' + classe);
+  if (titre) b.appendChild(creer('strong', null, titre + ' '));
+  b.appendChild(document.createTextNode(texte));
+  if (actions && actions.length) {
+    var boite = creer('div', 'actions');
+    actions.forEach(function (a) {
+      var bouton = creer('button', null, a.libelle);
+      bouton.addEventListener('click', a.action);
+      boite.appendChild(bouton);
+    });
+    b.appendChild(boite);
+  }
+  zone.appendChild(b);
+  return b;
+}
+
+function viderBandeaux() { vider(el('bandeaux')); }
+
+function toutRendre() {
+  if (Etat.modeCalendrier === 'annee') { el('zone-annee').hidden = false; el('zone-mois').hidden = true; rendreMosaique(); }
+  else { el('zone-annee').hidden = true; el('zone-mois').hidden = false; rendreMois(); }
+  rendreLegende();
+  if (Etat.jourSelection) rendreDetail(Etat.jourSelection);
+  rendreTemperatures();
+  rendreBilan();
+  rendreBoutonsComparaison();
+  rendreComparaison();
+}
+
+function chargerEtRendre() {
+  if (Etat.chargement) return Promise.resolve();
+  Etat.chargement = true;
+  viderBandeaux();
+  var premiereFois = !Stock.lire('agg:' + clefVille(Etat.ville) + ':' + (new Date().getFullYear() - 1));
+  if (premiereFois) {
+    var attente = ajouterBandeau('', 'Premier chargement.',
+      'Une dizaine de secondes le temps de récupérer l’historique. Ensuite, ce sera instantané.');
+    setTimeout(function () { if (attente.parentNode) attente.parentNode.removeChild(attente); }, 12000);
+  }
+  return chargerVille(Etat.ville, anneesACharger(), majProgression).then(function (res) {
+    Etat.jours = res.jours;
+    Etat.cacheVilles[Etat.ville.id] = res;
+    if (res.diagnostic) Etat.diagnostic = res.diagnostic;
+    majProgression(null);
+    Etat.chargement = false;
+    if (res.avertissements.length && !Object.keys(res.jours).length) {
+      var premier = res.avertissements[0];
+      var bloc = ajouterBandeau('erreur', 'Impossible de joindre le serveur météo.',
+        premier.message + ' Vérifie la connexion, puis réessaie.',
+        [{ libelle: 'Réessayer', action: function () { viderBandeaux(); chargerEtRendre(); } }]);
+      if (premier.url) {
+        var code = creer('div');
+        code.appendChild(creer('code', null, premier.url));
+        bloc.appendChild(code);
+      }
+    } else if (res.avertissements.length) {
+      ajouterBandeau('alerte', 'Chargement partiel.',
+        res.avertissements.length + (res.avertissements.length > 1 ? ' périodes n’ont pas pu être récupérées' : ' période n’a pas pu être récupérée') +
+        ' — les années manquantes apparaîtront hachurées.');
+    }
+    toutRendre();
+    rendreMethodo();
+  }, function (e) {
+    Etat.chargement = false;
+    majProgression(null);
+    ajouterBandeau('erreur', 'Erreur inattendue.', e && e.message ? e.message : String(e));
+  });
+}
+
+function remplirSelecteurs() {
+  var sv = el('choix-ville');
+  vider(sv);
+  Etat.villes.forEach(function (v) {
+    var o = creer('option', null, v.nom);
+    o.value = v.id;
+    sv.appendChild(o);
+  });
+  sv.value = Etat.ville.id;
+
+  var sa = el('choix-annee');
+  vider(sa);
+  anneesACharger().slice().reverse().forEach(function (a) {
+    var o = creer('option', null, String(a));
+    o.value = String(a);
+    sa.appendChild(o);
+  });
+  sa.value = String(Etat.annee);
+}
+
+function basculerVue(nom) {
+  Etat.vue = nom;
+  var sections = document.querySelectorAll('.vue');
+  for (var i = 0; i < sections.length; i++) sections[i].classList.remove('actif');
+  el('vue-' + nom).classList.add('actif');
+  var onglets = document.querySelectorAll('.onglets button');
+  for (var j = 0; j < onglets.length; j++) {
+    onglets[j].setAttribute('aria-selected', onglets[j].dataset.vue === nom ? 'true' : 'false');
+  }
+  window.scrollTo(0, 0);
+  var prefs = lirePrefs();
+  prefs.vue = nom;
+  ecrirePrefs(prefs);
+}
+
+function brancherEvenements() {
+  el('choix-ville').addEventListener('change', function () {
+    Etat.ville = trouverVille(this.value) || VILLES[0];
+    Etat.jourSelection = null;
+    var prefs = lirePrefs();
+    prefs.ville = Etat.ville.id;
+    ecrirePrefs(prefs);
+    chargerEtRendre();
+  });
+  el('choix-annee').addEventListener('change', function () {
+    Etat.annee = +this.value;
+    Etat.moisAffiche = 1;
+    Etat.jourSelection = null;
+    toutRendre();
+  });
+
+  document.querySelector('.onglets').addEventListener('click', function (e) {
+    var b = e.target.closest ? e.target.closest('button') : null;
+    if (b && b.dataset.vue) basculerVue(b.dataset.vue);
+  });
+
+  el('btn-mode-annee').addEventListener('click', function () {
+    Etat.modeCalendrier = 'annee';
+    this.setAttribute('aria-pressed', 'true');
+    el('btn-mode-mois').setAttribute('aria-pressed', 'false');
+    toutRendre();
+  });
+  el('btn-mode-mois').addEventListener('click', function () {
+    Etat.modeCalendrier = 'mois';
+    this.setAttribute('aria-pressed', 'true');
+    el('btn-mode-annee').setAttribute('aria-pressed', 'false');
+    toutRendre();
+  });
+  el('mois-precedent').addEventListener('click', function () {
+    Etat.moisAffiche = Etat.moisAffiche > 1 ? Etat.moisAffiche - 1 : 12;
+    rendreMois();
+  });
+  el('mois-suivant').addEventListener('click', function () {
+    Etat.moisAffiche = Etat.moisAffiche < 12 ? Etat.moisAffiche + 1 : 1;
+    rendreMois();
+  });
+  el('bascule-chaleur').addEventListener('change', function () {
+    Etat.colorerChaleur = this.checked;
+    if (Etat.modeCalendrier === 'annee') rendreMosaique(); else rendreMois();
+  });
+
+  function surClicJour(e) {
+    var b = e.target.closest ? e.target.closest('[data-date]') : null;
+    if (!b) return;
+    Etat.jourSelection = b.dataset.date;
+    if (Etat.modeCalendrier === 'annee') rendreMosaique(); else rendreMois();
+    rendreDetail(Etat.jourSelection);
+    el('detail-jour').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+  el('mosaique').addEventListener('click', surClicJour);
+  el('mois-grille').addEventListener('click', surClicJour);
+
+  el('legende').addEventListener('click', function (e) {
+    var b = e.target.closest ? e.target.closest('[data-categorie]') : null;
+    if (!b) return;
+    Etat.filtreCategorie = (Etat.filtreCategorie === b.dataset.categorie) ? null : b.dataset.categorie;
+    if (Etat.modeCalendrier === 'annee') rendreMosaique();
+    rendreLegende();
+  });
+
+  el('btn-temp-mois').addEventListener('click', function () {
+    Etat.modeTemp = 'mois';
+    this.setAttribute('aria-pressed', 'true');
+    el('btn-temp-jour').setAttribute('aria-pressed', 'false');
+    rendreTemperatures();
+  });
+  el('btn-temp-jour').addEventListener('click', function () {
+    Etat.modeTemp = 'jour';
+    this.setAttribute('aria-pressed', 'true');
+    el('btn-temp-mois').setAttribute('aria-pressed', 'false');
+    rendreTemperatures();
+  });
+
+  el('choix-periode').addEventListener('change', function () {
+    Etat.periode = this.value;
+    rendreBilan();
+    rendreComparaison();
+  });
+  el('bascule-weekend').addEventListener('change', function () {
+    Etat.weekendSeul = this.checked;
+    rendreBilan();
+    rendreComparaison();
+  });
+
+  el('compare-boutons').addEventListener('click', function (e) {
+    var b = e.target.closest ? e.target.closest('[data-ville-id]') : null;
+    if (!b) return;
+    var id = b.dataset.villeId;
+    var i = Etat.comparees.indexOf(id);
+    if (i >= 0) {
+      Etat.comparees.splice(i, 1);
+      rendreBoutonsComparaison();
+      rendreComparaison();
+      return;
+    }
+    Etat.comparees.push(id);
+    rendreBoutonsComparaison();
+    el('compare-resultat').textContent = 'Chargement de ' + trouverVille(id).nom + '…';
+    chargerVillePourComparaison(id).then(function () {
+      majProgression(null);
+      rendreComparaison();
+    });
+  });
+
+  el('btn-vider-cache').addEventListener('click', function () {
+    Stock.toutVider();
+    Etat.cacheVilles = Object.create(null);
+    Etat.comparees = [];
+    chargerEtRendre();
+  });
+}
+
+function enregistrerServiceWorker() {
+  // Inopérant en fichier local, et son enregistrement y jette une exception
+  // qui interromprait l'amorçage : d'où le double garde-fou.
+  if (!('serviceWorker' in navigator) || location.protocol !== 'https:') return;
+  try {
+    navigator.serviceWorker.register('sw.js').catch(function () {});
+    var recharge = false;
+    navigator.serviceWorker.addEventListener('controllerchange', function () {
+      if (recharge) return;                        // protection contre la boucle de rechargement
+      recharge = true;
+      try {
+        if (sessionStorage.getItem('plouf:recharge')) return;
+        sessionStorage.setItem('plouf:recharge', '1');
+      } catch (e) {}
+      location.reload();
+    });
+  } catch (e) {}
+}
+
+function demarrer() {
+  Stock.purgerVersionsPerimees();
+  var prefs = lirePrefs();
+  Etat.villes = VILLES.concat(lireVillesPerso());
+  if (prefs.ville) Etat.ville = trouverVille(prefs.ville) || VILLES[0];
+  Etat.annee = new Date().getFullYear();
+  Etat.comparees = [Etat.ville.id];
+  remplirSelecteurs();
+  brancherEvenements();
+  rendreMethodo();
+  if (prefs.vue) basculerVue(prefs.vue);
+  enregistrerServiceWorker();
+  chargerEtRendre();
+}
+
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', demarrer);
+else demarrer();
+</script>
+</body>
+</html>
