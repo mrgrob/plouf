@@ -6,7 +6,7 @@
      c'est localStorage, dans la page. Deux couches de cache sur la même
      donnée, ce sont deux vérités et un bug impossible à reproduire. */
 
-var VERSION = '1.0.0';
+var VERSION = '1.1.0';
 var CACHE = 'plouf-coquille-v' + VERSION;
 var COQUILLE = ['./', './index.html', './manifest.webmanifest', './icone.svg', './icone-192.png', './icone-512.png'];
 

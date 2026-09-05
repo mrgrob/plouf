@@ -249,8 +249,9 @@ await capturer('3-gros-carreaux', null, async () => {
 await capturer('4-temperatures', 'temperatures');
 await capturer('5-bilan', 'bilan');
 await capturer('6-comparaison', null, async () => {
-  await page.click('#compare-boutons button[data-ville-id="brest"]');
-  await page.click('#compare-boutons button[data-ville-id="nice"]');
+  await page.click('#compare-boutons button[data-ville-id="marseille"]');
+  await page.click('#compare-boutons button[data-ville-id="grenoble"]');
+  await page.click('#compare-boutons button[data-ville-id="poitiers"]');
   await page.waitForTimeout(2500);
   await page.evaluate(() => document.getElementById('compare-resultat').scrollIntoView());
 });
@@ -259,6 +260,12 @@ await capturer('8-diagnostic', null, async () => {
   await page.evaluate(() => document.getElementById('diagnostic').scrollIntoView());
 });
 
+const villes = await page.evaluate(() =>
+  [...document.querySelectorAll('#choix-ville option')].map((o) => o.textContent).join(', '));
+console.log('\n--- Villes proposées ---\n' + villes);
+const compare = await page.evaluate(() =>
+  [...document.querySelectorAll('#compare-resultat .compare-ligne .nom')].map((n) => n.textContent).join(', '));
+console.log('\n--- Villes comparées (chargées) ---\n' + compare);
 const diagnostic = await page.evaluate(() => document.getElementById('diagnostic').textContent);
 const bilan = await page.evaluate(() => document.getElementById('bilan-chiffres').textContent.slice(0, 260));
 
