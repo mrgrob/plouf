@@ -21,7 +21,7 @@ const code = source.slice(debut, fin);
 const M = new Function(code + `
   return { SEUILS, NB_CRENEAUX, CATEGORIES, joursDansMois, jourSemaine,
            minutesDepuisMinuit, dureeJourDansFenetre, grouperHeuresParJour,
-           calculerMesures, deriver, classerJour, encoderJour, decoderJour,
+           calculerMesures, deriver, categorieCiel, classerJour, encoderJour, decoderJour,
            fusionnerJours, calculerBilan, formaterDuree };
 `)();
 
@@ -85,12 +85,32 @@ test('huit heures de vraie pluie → pluie toute la journée', () => {
   assert.equal(v.categorie, 'continue');
 });
 
-test('trois heures de pluie → la case ajoutée « pluie par moments »', () => {
+test('trois heures de pluie → averse passagère (les deux catégories de pluie brève sont fusionnées)', () => {
   const pluie = repete(0);
   pluie[3] = 1.5; pluie[7] = 1.2; pluie[10] = 1.4;
   const v = M.classerJour(jour({ pluie, soleil: repete(30) }));
-  assert.equal(v.categorie, 'moments');
+  assert.equal(v.categorie, 'averse');
   assert.equal(v.derive.heuresPluie, 3);
+});
+
+test('quatre heures de pluie restent une averse, cinq basculent en pluie continue', () => {
+  const quatre = repete(0);
+  [2, 5, 8, 11].forEach((i) => { quatre[i] = 1.2; });
+  assert.equal(M.classerJour(jour({ pluie: quatre, soleil: repete(20) })).categorie, 'averse');
+
+  const cinq = repete(0);
+  [2, 5, 8, 11, 12].forEach((i) => { cinq[i] = 1.2; });
+  assert.equal(M.classerJour(jour({ pluie: cinq, soleil: repete(20) })).categorie, 'continue');
+});
+
+test('une demi-journée d’éclaircies compte désormais comme grand soleil', () => {
+  // 40 % de la durée du jour : c'était « éclaircies » avant la fusion.
+  const soleil = repete(0);
+  for (let i = 0; i < 6; i++) soleil[i] = 56;      // 336 min sur 840
+  const v = M.classerJour(jour({ pluie: repete(0), soleil, dureeJour: 840 }));
+  assert.equal(v.categorie, 'soleil');
+  assert.ok(v.derive.fractionSoleil > 0.25 && v.derive.fractionSoleil < 0.70,
+    'le cas testé doit bien être dans l’ancienne bande « éclaircies »');
 });
 
 test('bruine sous le seuil : six heures à 0,1 mm ne font pas une heure de pluie', () => {
@@ -109,22 +129,39 @@ test('journée d’hiver entièrement ensoleillée → grand soleil (le dénomin
   for (let i = 2; i < 10; i++) soleil[i] = 60;   // 8 h de soleil
   const v = M.classerJour(jour({ date: '2024-12-21', pluie: repete(0), soleil, dureeJour: 519, tmax: 9, tmin: 2 }));
   assert.equal(v.categorie, 'soleil');
-  // Contrôle du piège : rapporté aux 14 h de la fenêtre, ce serait 57 % et la
-  // journée basculerait en « éclaircies ». Aucune journée d'hiver ne pourrait
-  // alors jamais être ensoleillée.
-  assert.ok(480 / 840 < M.SEUILS.SUN_FULL);
-  assert.ok(480 / 519 >= M.SEUILS.SUN_FULL);
+  assert.equal(Math.round(v.derive.fractionSoleil * 100), 92,
+    'huit heures de soleil sur 8 h 39 de jour font 92 %, pas 57 % comme si on divisait par 14 h');
 });
 
 /* ============ Badges ============ */
 
-test('canicule et gel sont des badges, jamais des catégories', () => {
-  const chaud = M.classerJour(jour({ pluie: repete(0), soleil: repete(58), tmax: 38, tmin: 22 }));
-  assert.equal(chaud.categorie, 'soleil', 'une journée de canicule reste une journée de grand soleil');
-  assert.ok(chaud.badges.includes('canicule'));
+test('la canicule est une vignette à part entière, et le ciel reste indiqué', () => {
+  const v = M.classerJour(jour({ pluie: repete(0), soleil: repete(58), tmax: 38, tmin: 22 }));
+  assert.equal(v.categorie, 'canicule');
+  assert.ok(!v.badges.includes('canicule'), 'plus de badge : la canicule a sa propre vignette');
+  assert.ok(v.raisons.some((r) => /grand soleil/i.test(r)),
+    'le ciel sous la canicule doit rester lisible dans le détail du jour');
+  assert.equal(M.categorieCiel(v.derive), 'soleil');
+});
 
+test('la canicule passe devant le ciel, même quand une averse éclate', () => {
+  const pluie = repete(0);
+  pluie[12] = 6;                                   // orage de fin d'après-midi
+  const v = M.classerJour(jour({ pluie, soleil: repete(55), tmax: 36, tmin: 21 }));
+  assert.equal(v.categorie, 'canicule');
+  assert.equal(M.categorieCiel(v.derive), 'averse');
+});
+
+test('sous le seuil de canicule, la forte chaleur reste un simple badge', () => {
+  const v = M.classerJour(jour({ pluie: repete(0), soleil: repete(58), tmax: 33, tmin: 19 }));
+  assert.equal(v.categorie, 'soleil');
+  assert.ok(v.badges.includes('chaud'));
+});
+
+test('le gel est un badge', () => {
   const gele = M.classerJour(jour({ pluie: repete(0), soleil: repete(55), dureeJour: 540, tmax: 6, tmin: -3 }));
   assert.ok(gele.badges.includes('gel'));
+  assert.equal(gele.categorie, 'soleil');
 });
 
 test('grosse averse : badge orage au-delà de 8 mm en une heure', () => {

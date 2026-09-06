@@ -27,11 +27,12 @@
   --ombre: 0 1px 3px rgba(16, 30, 48, .10), 0 6px 18px rgba(16, 30, 48, .06);
   --rayon: 14px;
   --cat-soleil: #F5B301;
-  --cat-eclaircies: #9CC7E8;
+  --bleu-clair: #9CC7E8;
   --cat-gris: #B9BEC4;
   --cat-averse: #5B9BD5;
+  --cat-canicule: #E4572E;
   --cat-crachin: #7E9BB5;
-  --cat-moments: #2E6DA4;
+  --bleu-pluie: #2E6DA4;
   --cat-continue: #1B3F73;
   --cat-inconnu: #e4e6e9;
   --chaud: #d1495b;
@@ -182,7 +183,7 @@ main { padding: 0 12px; max-width: 900px; margin: 0 auto; }
 .heures .barre-zone { position: relative; height: 46px; width: 100%; display: flex; align-items: flex-end;
                       border-bottom: 1px solid var(--bord); background: var(--fond-doux); border-radius: 2px 2px 0 0; }
 .heures .soleil-fond { position: absolute; left: 0; right: 0; bottom: 0; background: var(--cat-soleil); opacity: .55; }
-.heures .barre-pluie { position: relative; z-index: 1; width: 100%; background: var(--cat-moments); border-radius: 2px 2px 0 0; }
+.heures .barre-pluie { position: relative; z-index: 1; width: 100%; background: var(--bleu-pluie); border-radius: 2px 2px 0 0; }
 .heures .h { font-size: .52rem; color: var(--texte-doux); }
 
 /* ---------- Graphique températures ---------- */
@@ -196,7 +197,7 @@ main { padding: 0 12px; max-width: 900px; margin: 0 auto; }
 .chiffre-cle { font-size: 2.6rem; font-weight: 800; line-height: 1; letter-spacing: -.03em; }
 .chiffre-cle.sec { color: var(--cat-soleil); }
 .chiffre-cle.pluie { color: var(--cat-continue); }
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .chiffre-cle.pluie { color: var(--cat-eclaircies); } }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .chiffre-cle.pluie { color: var(--bleu-clair); } }
 .sous-chiffre { font-size: .85rem; color: var(--texte-doux); }
 .barre-empilee { display: flex; height: 26px; border-radius: 7px; overflow: hidden; margin: 10px 0 6px; background: var(--fond-doux); }
 .barre-empilee span { display: block; height: 100%; }
@@ -358,12 +359,13 @@ main { padding: 0 12px; max-width: 900px; margin: 0 auto; }
 
       <h3>Le soleil se compte sur la durée du jour, pas sur 14 heures</h3>
       <p>Le 21 décembre à Blanquefort, il fait jour de 8 h 41 à 17 h 20 : 8 h 39 dans notre fenêtre. Si l'on rapportait l'ensoleillement aux 14 heures de la fenêtre, une journée de ciel bleu absolu plafonnerait à 62 %, et <em>aucune journée d'hiver ne pourrait jamais être « grand soleil »</em>. Le pourcentage affiché est donc toujours : soleil mesuré ÷ durée du jour clair. 100 % un 21 décembre, c'est 8 h 39 de soleil ; un 21 juin, c'est 14 heures.</p>
+      <p>Une journée bascule du côté du soleil dès que cette part dépasse <span class="seuil" data-seuil-pourcent="SUN_MIXED"></span> %. C'est volontairement bas : en dessous, le ciel est resté couvert du matin au soir, et la journée est comptée « grise, mais sèche ».</p>
 
-      <h3>Les sept catégories</h3>
+      <h3>Les vignettes</h3>
       <div id="methodo-categories"></div>
 
       <h3>Les badges</h3>
-      <p>La chaleur et l'orage ne sont pas des catégories de ciel : une journée à 38 °C est presque toujours une journée de grand soleil. En faire une case à part retirerait les plus belles journées du compteur du beau temps. Ils sont donc affichés en plus, sous forme de badges :</p>
+      <p>La canicule a sa propre vignette : au-delà du seuil, c'est la chaleur qui fait l'événement de la journée, pas le ciel. Le détail du jour rappelle quand même le temps qu'il faisait — une journée caniculaire est presque toujours une journée de grand soleil. Les autres particularités, elles, s'ajoutent à la vignette sous forme de badges :</p>
       <div id="methodo-badges"></div>
 
       <h3>D'où viennent les chiffres</h3>
@@ -409,9 +411,9 @@ main { padding: 0 12px; max-width: 900px; margin: 0 auto; }
 
 /* ---------- 1. CONFIGURATION ---------- */
 
-var VERSION = '1.1.0';
+var VERSION = '1.2.0';
 var SCHEMA_VERSION = 1;   // format des mesures en cache : changer purge le cache
-var RULES_VERSION = 1;    // seuils de classification : changer recalcule sans retélécharger
+var RULES_VERSION = 2;    // seuils de classification : changer recalcule sans retélécharger
 
 var VILLES = [
   { id: 'blanquefort', nom: 'Blanquefort', dep: 'Gironde',        lat: 44.91, lon: -0.63 },
@@ -443,10 +445,8 @@ var SEUILS = {
   DRY_DAY_MM: 0.2,         // « pas une goutte » sur la journée
   LIGHT_DAY_MM: 1.0,       // le « moins de 1 mm » de la consigne
   DRIZZLE_TOTAL_MM: 2.0,   // longtemps, mais très peu : crachin
-  CONTINUOUS_HOURS: 5,     // pluie toute la journée
-  SCATTERED_HOURS: 3,      // pluie par moments
-  SUN_FULL: 0.70,          // grand soleil
-  SUN_MIXED: 0.25,         // frontière éclaircies / gris
+  CONTINUOUS_HOURS: 5,     // au-delà : crachin ou pluie toute la journée
+  SUN_MIXED: 0.25,         // frontière grand soleil / gris
   HEAVY_HOUR_MM: 8.0,      // badge grosse averse
   HEAT_C: 35.0,            // canicule
   WARM_C: 32.0,            // forte chaleur
@@ -455,28 +455,25 @@ var SEUILS = {
 };
 
 var CATEGORIES = {
-  soleil:     { emo: '☀️',  nom: 'Grand soleil',         couleur: '#F5B301', rang: 1,
-                def: 'Pas une goutte entre 7 h et 21 h, et le soleil brille plus de {SUN_FULL} % de la durée du jour.' },
-  eclaircies: { emo: '⛅',  nom: 'Éclaircies',            couleur: '#9CC7E8', rang: 2,
-                def: 'Moins d’un millimètre en journée, et le soleil se montre entre {SUN_MIXED} % et {SUN_FULL} % du temps.' },
+  canicule:   { emo: '🔥',  nom: 'Canicule',              couleur: '#E4572E', rang: 1,
+                def: 'Température maximale d’au moins {HEAT_C} °C. Ce jour-là, c’est la chaleur qui fait l’événement, pas le ciel — le détail du jour indique quand même le temps qu’il a fait.' },
+  soleil:     { emo: '☀️',  nom: 'Grand soleil',         couleur: '#F5B301', rang: 2,
+                def: 'Le soleil se montre plus de {SUN_MIXED} % de la durée du jour, et il n’est pas tombé un millimètre.' },
   gris:       { emo: '🌥️', nom: 'Gris, mais sec',        couleur: '#B9BEC4', rang: 3,
                 def: 'Il n’a quasiment pas plu, mais le soleil est resté sous {SUN_MIXED} % : la journée grise dont personne ne se mouille.' },
   averse:     { emo: '🌦️', nom: 'Averse passagère',      couleur: '#5B9BD5', rang: 4,
-                def: 'Plus d’un millimètre, concentré sur une ou deux heures. Dégagé le reste de la journée.' },
+                def: 'De la pluie sur quatre heures au plus. Le reste de la journée est dégagé.' },
   crachin:    { emo: '🌫️', nom: 'Crachin',                couleur: '#7E9BB5', rang: 5,
                 def: 'Cinq heures de pluie ou plus, mais moins de {DRIZZLE_TOTAL_MM} mm au total : il bruine, il ne pleut pas.' },
-  moments:    { emo: '🌧️', nom: 'Pluie par moments',     couleur: '#2E6DA4', rang: 6,
-                def: 'Trois ou quatre heures de pluie dans la journée, entrecoupées.' },
-  continue:   { emo: '☔',  nom: 'Pluie toute la journée',couleur: '#1B3F73', rang: 7,
+  continue:   { emo: '☔',  nom: 'Pluie toute la journée',couleur: '#1B3F73', rang: 6,
                 def: 'Cinq heures de pluie ou plus, et plus de {DRIZZLE_TOTAL_MM} mm : le vrai temps gris et humide en continu.' },
-  inconnu:    { emo: '❔',  nom: 'Données manquantes',    couleur: '#e4e6e9', rang: 8,
+  inconnu:    { emo: '❔',  nom: 'Données manquantes',    couleur: '#e4e6e9', rang: 7,
                 def: 'Moins de {MIN_SLOTS} heures renseignées sur 14 : la journée est écartée de tous les compteurs.' }
 };
 
-var ORDRE_CATEGORIES = ['soleil', 'eclaircies', 'gris', 'averse', 'crachin', 'moments', 'continue', 'inconnu'];
+var ORDRE_CATEGORIES = ['canicule', 'soleil', 'gris', 'averse', 'crachin', 'continue', 'inconnu'];
 
 var BADGES = {
-  canicule: { emo: '🔥', nom: 'Canicule',        def: 'Température maximale d’au moins {HEAT_C} °C.' },
   chaud:    { emo: '🥵', nom: 'Forte chaleur',   def: 'Entre {WARM_C} °C et {HEAT_C} °C.' },
   gel:      { emo: '❄️', nom: 'Gel',             def: 'Température minimale au plus égale à {FROST_C} °C.' },
   orage:    { emo: '⛈️', nom: 'Grosse averse',   def: 'Au moins {HEAVY_HOUR_MM} mm tombés en une seule heure.' },
@@ -643,10 +640,24 @@ function deriver(mesures) {
   };
 }
 
-/* L'arbre de décision. Règles ordonnées : la première vraie l'emporte.
-   Exhaustif par construction — R1/R2 épuisent heuresPluie >= 5, R3 les
-   valeurs 3 et 4, et les trois intervalles de pluieTotale qui suivent
-   (>= 1, < 0,2, entre les deux) couvrent le reste sans recouvrement. */
+/* Le ciel seul, sans la température. Règles ordonnées : la première vraie
+   l'emporte. Exhaustif par construction — les deux premières règles épuisent
+   heuresPluie >= 5, la troisième couvre 1 à 4 heures de pluie ainsi que le
+   millimètre tombé en une heure, et les deux dernières partagent le reste
+   selon l'ensoleillement. */
+function categorieCiel(d) {
+  if (d.heuresPluie >= SEUILS.CONTINUOUS_HOURS) {
+    return (d.pluieTotale < SEUILS.DRIZZLE_TOTAL_MM) ? 'crachin' : 'continue';
+  }
+  if (d.heuresPluie >= 1 && d.pluieTotale >= SEUILS.LIGHT_DAY_MM) return 'averse';
+  if (d.heuresPluie >= 3) return 'averse';
+  if (d.fractionSoleil !== null && d.fractionSoleil >= SEUILS.SUN_MIXED) return 'soleil';
+  return 'gris';
+}
+
+/* La vignette du jour. La canicule passe devant le ciel : au-delà du seuil,
+   c'est elle l'événement de la journée. Le ciel n'est pas perdu pour autant,
+   il est rappelé dans les raisons affichées sous la vignette. */
 function classerJour(mesures) {
   var d = deriver(mesures);
   var raisons = [];
@@ -657,19 +668,14 @@ function classerJour(mesures) {
              raisons: ['Seulement ' + mesures.creneaux + ' heures renseignées sur ' + NB_CRENEAUX + ' entre 7 h et 21 h.'] };
   }
 
-  var categorie;
-  if (d.heuresPluie >= SEUILS.CONTINUOUS_HOURS) {
-    categorie = (d.pluieTotale < SEUILS.DRIZZLE_TOTAL_MM) ? 'crachin' : 'continue';
-  } else if (d.heuresPluie >= SEUILS.SCATTERED_HOURS) {
-    categorie = 'moments';
-  } else if (d.pluieTotale >= SEUILS.LIGHT_DAY_MM) {
-    categorie = 'averse';
-  } else if (d.pluieTotale < SEUILS.DRY_DAY_MM && d.fractionSoleil !== null && d.fractionSoleil >= SEUILS.SUN_FULL) {
-    categorie = 'soleil';
-  } else if (d.fractionSoleil !== null && d.fractionSoleil >= SEUILS.SUN_MIXED) {
-    categorie = 'eclaircies';
-  } else {
-    categorie = 'gris';
+  var ciel = categorieCiel(d);
+  var caniculaire = (typeof mesures.tmax === 'number' && mesures.tmax >= SEUILS.HEAT_C);
+  var categorie = caniculaire ? 'canicule' : ciel;
+
+  if (caniculaire) {
+    raisons.push('Jusqu’à ' + Math.round(mesures.tmax) + ' °C : au-delà de ' +
+      String(SEUILS.HEAT_C).replace('.0', '') + ' °C, la journée est comptée caniculaire.');
+    raisons.push('Côté ciel, c’était ' + CATEGORIES[ciel].emo + ' ' + CATEGORIES[ciel].nom.toLowerCase() + '.');
   }
 
   raisons.push(d.heuresPluie === 0
@@ -684,9 +690,8 @@ function classerJour(mesures) {
       + (mesures.estime ? ' (estimé d’après la nébulosité)' : ''));
   }
 
-  if (typeof mesures.tmax === 'number') {
-    if (mesures.tmax >= SEUILS.HEAT_C) badges.push('canicule');
-    else if (mesures.tmax >= SEUILS.WARM_C) badges.push('chaud');
+  if (typeof mesures.tmax === 'number' && mesures.tmax >= SEUILS.WARM_C && mesures.tmax < SEUILS.HEAT_C) {
+    badges.push('chaud');
   }
   if (typeof mesures.tmin === 'number' && mesures.tmin <= SEUILS.FROST_C) badges.push('gel');
   if (d.maxHoraire >= SEUILS.HEAVY_HOUR_MM) badges.push('orage');
@@ -791,7 +796,7 @@ function calculerBilan(jours, filtre) {
     if (v.derive.minutesSoleil !== null) minutesSoleil += v.derive.minutesSoleil;
     if (v.derive.pluieTotale < SEUILS.DRY_DAY_MM) joursSecs++;
     if (v.derive.pluieTotale >= 1) jourPluieOmm++;
-    if (v.badges.indexOf('canicule') >= 0) canicule++;
+    if (v.categorie === 'canicule') canicule++;
     if (v.badges.indexOf('gel') >= 0) gel++;
   }
   return {
@@ -800,7 +805,7 @@ function calculerBilan(jours, filtre) {
     heuresSoleil: Math.round(minutesSoleil / 60),
     joursSecs: joursSecs,
     joursPluieOmm: jourPluieOmm,
-    joursBeaux: comptes.soleil + comptes.eclaircies,
+    joursBeaux: comptes.soleil + comptes.canicule,
     joursVraiePluie: comptes.continue,
     canicule: canicule, gel: gel
   };
@@ -1296,7 +1301,7 @@ function rendreMois() {
     if (m) {
       var categorieJour = classerJour(m).categorie;
       // Sur les cases les plus foncées, le numéro du jour doit passer en blanc.
-      if (!Etat.colorerChaleur && ['crachin', 'moments', 'continue'].indexOf(categorieJour) >= 0) bouton.className += ' sombre';
+      if (!Etat.colorerChaleur && ['crachin', 'continue', 'canicule'].indexOf(categorieJour) >= 0) bouton.className += ' sombre';
       else if (Etat.colorerChaleur && typeof m.tmax === 'number' && (m.tmax <= 2 || m.tmax >= 30)) bouton.className += ' sombre';
       bouton.style.background = couleurJour(m);
       if (m.partiel) bouton.className += ' partiel';
@@ -1771,7 +1776,7 @@ function chargerVillePourComparaison(id) {
 /* ----- Méthodologie ----- */
 function texteSeuils(modele) {
   return modele.replace(/\{(\w+)\}/g, function (tout, cle) {
-    if (cle === 'SUN_FULL' || cle === 'SUN_MIXED') return String(Math.round(SEUILS[cle] * 100));
+    if (cle === 'SUN_MIXED') return String(Math.round(SEUILS[cle] * 100));
     var v = SEUILS[cle];
     return v === undefined ? tout : String(v).replace('.', ',');
   });
@@ -1782,6 +1787,10 @@ function rendreMethodo() {
   for (var i = 0; i < noeuds.length; i++) {
     var cle = noeuds[i].getAttribute('data-seuil');
     noeuds[i].textContent = String(SEUILS[cle]).replace('.', ',');
+  }
+  var pourcents = document.querySelectorAll('[data-seuil-pourcent]');
+  for (var j = 0; j < pourcents.length; j++) {
+    pourcents[j].textContent = String(Math.round(SEUILS[pourcents[j].getAttribute('data-seuil-pourcent')] * 100));
   }
   var zoneCat = el('methodo-categories');
   vider(zoneCat);

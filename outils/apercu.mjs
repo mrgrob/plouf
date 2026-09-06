@@ -242,6 +242,16 @@ await capturer('2-detail', null, async () => {
   await page.waitForTimeout(300);
   await page.evaluate(() => document.getElementById('detail-jour').scrollIntoView());
 });
+await capturer('2b-canicule', null, async () => {
+  // Une journée caniculaire : vérifie que le ciel reste indiqué sous la vignette 🔥.
+  await page.evaluate(() => {
+    const cible = [...document.querySelectorAll('#mosaique .case[aria-label]')]
+      .find((c) => /Canicule/.test(c.getAttribute('aria-label')));
+    if (cible) cible.click();
+  });
+  await page.waitForTimeout(300);
+  await page.evaluate(() => document.getElementById('detail-jour').scrollIntoView());
+});
 await capturer('3-gros-carreaux', null, async () => {
   await page.evaluate(() => window.scrollTo(0, 0));
   await page.click('#btn-mode-mois');

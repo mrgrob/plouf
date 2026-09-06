@@ -64,18 +64,17 @@ compris. En résumé :
 
 | Vignette | Ce qu'elle veut dire |
 |---|---|
-| ☀️ Grand soleil | pas une goutte entre 7 h et 21 h, et plus de 70 % de la durée du jour au soleil |
-| ⛅ Éclaircies | presque pas de pluie, entre 25 % et 70 % de soleil |
+| 🔥 Canicule | 35 °C ou plus. Passe devant le ciel : c'est la chaleur qui fait la journée |
+| ☀️ Grand soleil | pas un millimètre, et le soleil se montre plus de 25 % de la durée du jour |
 | 🌥️ Gris, mais sec | il n'a pas plu, mais le soleil est resté sous 25 % |
-| 🌦️ Averse passagère | plus d'un millimètre, sur une ou deux heures seulement |
+| 🌦️ Averse passagère | de la pluie sur quatre heures au plus, dégagé le reste du temps |
 | 🌫️ Crachin | cinq heures de pluie ou plus, mais moins de 2 mm au total |
-| 🌧️ Pluie par moments | trois ou quatre heures de pluie dans la journée |
 | ☔ Pluie toute la journée | cinq heures de pluie ou plus, et plus de 2 mm |
 
-La canicule (≥ 35 °C), le gel, l'orage et les simples gouttes sont des **badges**
-qui s'ajoutent à la vignette. Une journée à 38 °C reste une journée de grand
-soleil : en faire une catégorie à part retirerait les plus belles journées du
-compteur du beau temps.
+Le gel, l'orage et les simples gouttes s'ajoutent en **badges** sur la vignette,
+de même que la forte chaleur entre 32 et 35 °C. Sous une vignette 🔥, le détail
+du jour rappelle toujours le ciel qu'il faisait — une journée caniculaire est
+presque toujours une journée de grand soleil.
 
 Deux points de méthode qui changent tout, et qui ne sont pas évidents :
 
