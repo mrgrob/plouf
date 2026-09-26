@@ -37,6 +37,16 @@
   --cat-inconnu: #e4e6e9;
   --chaud: #d1495b;
   --froid: #4a7fb5;
+  /* Identité des villes dans les graphiques de comparaison. Ordre fixe,
+     jamais recyclé : une ville garde sa couleur même si une autre est retirée.
+     Palette vérifiée pour le daltonisme (séparation protan/deutan/tritan)
+     sur les deux surfaces, claire et sombre. */
+  --serie-1: #2a78d6;
+  --serie-2: #eb6834;
+  --serie-3: #1baf7a;
+  --serie-4: #eda100;
+  --serie-5: #e87ba4;
+  --serie-6: #008300;
   color-scheme: light dark;
 }
 @media (prefers-color-scheme: dark) {
@@ -51,6 +61,12 @@
     --accent-clair: #9cc7e8;
     --ombre: 0 1px 3px rgba(0, 0, 0, .5), 0 6px 18px rgba(0, 0, 0, .3);
     --cat-inconnu: #2a323c;
+    --serie-1: #3987e5;
+    --serie-2: #d95926;
+    --serie-3: #199e70;
+    --serie-4: #c98500;
+    --serie-5: #d55181;
+    --serie-6: #008300;
   }
 }
 * { box-sizing: border-box; }
@@ -208,6 +224,40 @@ main { padding: 0 12px; max-width: 900px; margin: 0 auto; }
 .compare-ligne .nom { width: 6.5em; font-size: .8rem; flex: none; }
 .compare-ligne .barre-empilee { flex: 1; margin: 0; height: 20px; }
 
+/* ---------- Comparaison par mesure ---------- */
+.classement { margin: 4px 0 2px; }
+.classement-ligne { display: flex; align-items: center; gap: 8px; margin-bottom: 9px; }
+.classement-ligne .nom { width: 6.6em; flex: none; font-size: .8rem; display: flex; align-items: center; gap: 5px; }
+.classement-ligne .piste { flex: 1; height: 14px; background: var(--fond-doux); border-radius: 4px; overflow: hidden; }
+.classement-ligne .remplissage { height: 100%; border-radius: 4px; }
+.classement-ligne .piste.points { background: transparent; overflow: visible; position: relative; }
+.classement-ligne .piste.points::before {
+  content: ''; position: absolute; left: 0; right: 0; top: 50%; height: 1px;
+  background: var(--bord);
+}
+.classement-ligne .point {
+  position: absolute; top: 50%; width: 11px; height: 11px; border-radius: 50%;
+  transform: translate(-50%, -50%); box-shadow: 0 0 0 2px var(--fond-carte);
+}
+.classement-ligne .valeur { width: 4.6em; flex: none; text-align: right; font-size: .82rem; font-variant-numeric: tabular-nums; font-weight: 600; }
+.puce-serie { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+
+.courbe-boite { position: relative; margin-top: 4px; }
+.courbe-boite svg { display: block; width: 100%; height: auto; touch-action: pan-y; }
+.infobulle {
+  position: absolute; pointer-events: none; opacity: 0; transition: opacity .12s ease;
+  background: var(--fond-carte); border: 1px solid var(--bord); border-radius: 9px;
+  box-shadow: var(--ombre); padding: 7px 9px; font-size: .78rem; min-width: 8.5em;
+  z-index: 5;
+}
+.infobulle.visible { opacity: 1; }
+.infobulle .mois { font-weight: 700; margin-bottom: 3px; }
+.infobulle .ligne { display: flex; align-items: center; gap: 5px; justify-content: space-between; }
+.infobulle .ligne span:first-child { display: flex; align-items: center; gap: 5px; }
+.infobulle .ligne b { font-variant-numeric: tabular-nums; }
+.viseur { stroke: var(--texte-doux); stroke-width: 1; opacity: 0; }
+.viseur.visible { opacity: .6; }
+
 /* ---------- Onglets ---------- */
 .onglets {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 30;
@@ -340,6 +390,10 @@ main { padding: 0 12px; max-width: 900px; margin: 0 auto; }
       <h3>Comparer les villes</h3>
       <p><small>Chaque ville est chargée à la demande — touche son nom pour l'ajouter à la comparaison. Même période, mêmes règles, mêmes seuils.</small></p>
       <div id="compare-boutons" class="legende" style="margin-bottom:12px"></div>
+      <div class="rangee" style="margin-bottom:12px">
+        <label for="choix-mesure" style="font-size:.8rem;color:var(--texte-doux)">Comparer sur</label>
+        <select id="choix-mesure" aria-label="Mesure comparée" style="max-width:60vw"></select>
+      </div>
       <div id="compare-resultat"></div>
     </div>
   </section>
@@ -411,7 +465,7 @@ main { padding: 0 12px; max-width: 900px; margin: 0 auto; }
 
 /* ---------- 1. CONFIGURATION ---------- */
 
-var VERSION = '1.3.0';
+var VERSION = '1.5.0';
 var SCHEMA_VERSION = 1;   // format des mesures en cache : changer purge le cache
 var RULES_VERSION = 2;    // seuils de classification : changer recalcule sans retélécharger
 
@@ -813,6 +867,128 @@ function calculerBilan(jours, filtre) {
   };
 }
 
+/* Les mesures comparables d'une ville à l'autre.
+   Chacune dit comment lire UNE journée, et comment agréger un paquet de
+   journées. Une mesure ne mélange jamais deux unités : comparer des °C et
+   des millimètres sur un même axe ne veut rien dire, donc on ne propose
+   qu'une mesure à la fois. */
+var MESURES = {
+  repartition: { nom: 'Répartition des journées', type: 'repartition' },
+  eau: {
+    nom: 'Eau tombée en journée', unite: 'mm', court: 'mm', decimales: 0, basZero: true, bref: 'Eau',
+    agregation: 'somme', valeur: function (j) { return j.derive.pluieTotale; },
+    aide: 'Somme des précipitations entre 7 h et 21 h. La pluie de la nuit n’y est pas.'
+  },
+  joursSecs: {
+    nom: 'Journées sans une goutte', unite: '%', court: '%', decimales: 0, basZero: true, bref: 'Jours secs',
+    agregation: 'pourcent', test: function (j) { return j.derive.pluieTotale < SEUILS.DRY_DAY_MM; },
+    aide: 'Part des journées mesurées où rien n’est tombé entre 7 h et 21 h.'
+  },
+  pluieContinue: {
+    nom: 'Journées de pluie continue', unite: 'jours', court: 'j', decimales: 0, basZero: true, bref: 'Pluie continue',
+    agregation: 'compte', test: function (j) { return j.categorie === 'continue'; },
+    aide: 'Cinq heures de pluie ou plus dans la journée, et plus de 2 mm.'
+  },
+  averses: {
+    nom: 'Journées d’averse', unite: 'jours', court: 'j', decimales: 0, basZero: true, bref: 'Averses',
+    agregation: 'compte', test: function (j) { return j.categorie === 'averse'; },
+    aide: 'De la pluie, mais tenant en quatre heures au plus.'
+  },
+  soleil: {
+    nom: 'Heures de soleil', unite: 'heures', court: 'h', decimales: 0, basZero: true, bref: 'Soleil',
+    agregation: 'somme',
+    valeur: function (j) { return j.derive.minutesSoleil === null ? null : j.derive.minutesSoleil / 60; },
+    aide: 'Ensoleillement mesuré entre 7 h et 21 h.'
+  },
+  tmax: {
+    nom: 'Température maximale moyenne', unite: '°C', court: '°C', decimales: 1, basZero: false, bref: 'T° max moyenne',
+    agregation: 'moyenne', valeur: function (j) { return j.mesures.tmax; },
+    aide: 'Moyenne des températures les plus hautes de chaque journée.'
+  },
+  tmin: {
+    nom: 'Température minimale moyenne', unite: '°C', court: '°C', decimales: 1, basZero: false, bref: 'T° min moyenne',
+    agregation: 'moyenne', valeur: function (j) { return j.mesures.tmin; },
+    aide: 'Moyenne des températures les plus basses de chaque journée.'
+  },
+  canicule: {
+    nom: 'Journées de canicule', unite: 'jours', court: 'j', decimales: 0, basZero: true, bref: 'Canicule',
+    agregation: 'compte', test: function (j) { return j.categorie === 'canicule'; },
+    aide: 'Température maximale d’au moins 35 °C.'
+  },
+  gel: {
+    nom: 'Journées de gel', unite: 'jours', court: 'j', decimales: 0, basZero: true, bref: 'Gel',
+    agregation: 'compte', test: function (j) { return j.badges.indexOf('gel') >= 0; },
+    aide: 'Température minimale au plus égale à 0 °C.'
+  }
+};
+
+var ORDRE_MESURES = ['repartition', 'joursSecs', 'eau', 'pluieContinue', 'averses',
+                     'soleil', 'tmax', 'tmin', 'canicule', 'gel'];
+
+/* Agrège une mesure sur les journées retenues par le filtre.
+   Mêmes exclusions que le bilan : jour en cours et journées incomplètes
+   sortent du calcul, et le dénominateur rendu est le nombre de journées
+   réellement mesurées. */
+function agregerMesure(jours, filtre, mesure) {
+  var somme = 0, retenus = 0, mesurees = 0;
+  var dates = Object.keys(jours);
+  for (var i = 0; i < dates.length; i++) {
+    var m = jours[dates[i]];
+    if (filtre && !filtre(dates[i])) continue;
+    if (m.partiel) continue;
+    var v = classerJour(m);
+    if (v.categorie === 'inconnu') continue;
+    mesurees++;
+    var journee = { mesures: m, derive: v.derive, categorie: v.categorie, badges: v.badges };
+    if (mesure.test) {
+      if (mesure.test(journee)) retenus++;
+    } else {
+      var x = mesure.valeur(journee);
+      if (typeof x === 'number' && isFinite(x)) { somme += x; retenus++; }
+    }
+  }
+  var valeur = null;
+  if (mesure.agregation === 'somme') valeur = mesurees ? somme : null;
+  else if (mesure.agregation === 'compte') valeur = mesurees ? retenus : null;
+  else if (mesure.agregation === 'pourcent') valeur = mesurees ? retenus / mesurees * 100 : null;
+  else if (mesure.agregation === 'moyenne') valeur = retenus ? somme / retenus : null;
+  return { valeur: valeur, mesurees: mesurees, retenus: retenus };
+}
+
+/* La même mesure, découpée par mois. Un mois sans journée exploitable rend
+   null : la courbe s'interrompt au lieu de relier deux points de part et
+   d'autre d'un trou, ce qui inventerait une tendance. */
+function serieMensuelle(jours, annee, filtre, mesure) {
+  var out = [];
+  for (var mois = 1; mois <= 12; mois++) {
+    var prefixe = annee + '-' + (mois < 10 ? '0' : '') + mois + '-';
+    var filtreMois = (function (p, f) {
+      return function (date) {
+        if (date.indexOf(p) !== 0) return false;
+        return f ? f(date) : true;
+      };
+    })(prefixe, filtre);
+    var r = agregerMesure(jours, filtreMois, mesure);
+    out.push({ mois: mois, valeur: r.valeur, mesurees: r.mesurees });
+  }
+  return out;
+}
+
+/* Bornes d'axe lisibles : un pas de 1, 2 ou 5 fois une puissance de dix. */
+function echelleLisible(min, max, nbGraduations) {
+  if (!isFinite(min) || !isFinite(max)) return { min: 0, max: 1, graduations: [0, 1] };
+  if (max === min) { max = min + 1; }
+  var brut = (max - min) / Math.max(1, nbGraduations);
+  var magnitude = Math.pow(10, Math.floor(Math.log(brut) / Math.LN10));
+  var norme = brut / magnitude;
+  var pas = (norme <= 1 ? 1 : norme <= 2 ? 2 : norme <= 5 ? 5 : 10) * magnitude;
+  var bas = Math.floor(min / pas) * pas;
+  var haut = Math.ceil(max / pas) * pas;
+  var graduations = [];
+  for (var v = bas; v <= haut + pas / 2; v += pas) graduations.push(Math.round(v / pas) * pas);
+  return { min: bas, max: haut, pas: pas, graduations: graduations };
+}
+
 /* ==================== END LOGIQUE PURE ==================== */
 
 /* ---------- 3. STOCKAGE LOCAL ----------
@@ -1194,6 +1370,8 @@ var Etat = {
   villes: VILLES.slice(),
   cacheVilles: Object.create(null),
   comparees: [],
+  mesure: 'repartition',
+  seriesVilles: Object.create(null),
   diagnostic: null,
   chargement: false
 };
@@ -1692,6 +1870,31 @@ function rendreBoutonsComparaison() {
   });
 }
 
+/* Une ville garde sa couleur tant qu'elle est comparée, même si une autre
+   est retirée de la sélection : la couleur suit la ville, jamais son rang.
+   D'où l'attribution du plus petit emplacement libre, et sa libération. */
+var NB_SERIES = 6;
+
+function attribuerSerie(villeId) {
+  if (Etat.seriesVilles[villeId] !== undefined) return;
+  var pris = {};
+  for (var k in Etat.seriesVilles) pris[Etat.seriesVilles[k]] = true;
+  for (var i = 0; i < NB_SERIES; i++) {
+    if (!pris[i]) { Etat.seriesVilles[villeId] = i; return; }
+  }
+}
+function libererSerie(villeId) { delete Etat.seriesVilles[villeId]; }
+function couleurSerie(villeId) {
+  var i = Etat.seriesVilles[villeId];
+  return (i === undefined) ? 'var(--texte-doux)' : 'var(--serie-' + (i + 1) + ')';
+}
+
+function formaterValeur(valeur, mesure) {
+  if (valeur === null || valeur === undefined) return '—';
+  var arrondi = mesure.decimales ? valeur.toFixed(mesure.decimales) : String(Math.round(valeur));
+  return nombreFr(arrondi).replace('.', ',');
+}
+
 function rendreComparaison() {
   var zone = el('compare-resultat');
   vider(zone);
@@ -1699,22 +1902,49 @@ function rendreComparaison() {
     zone.appendChild(creer('div', 'attente', 'Choisis au moins une ville ci-dessus.'));
     return;
   }
-  var lignes = [];
+
+  var filtre = filtrePeriode();
+  var entrees = [];
   var maillesIdentiques = Object.create(null);
   Etat.comparees.forEach(function (id) {
-    var entree = Etat.cacheVilles[id];
-    if (!entree) return;
-    var bilan = calculerBilan(entree.jours, filtrePeriode());
-    if (!bilan.mesures) return;
+    var cache = Etat.cacheVilles[id];
     var ville = trouverVille(id);
-    var maille = entree.coordsApi ? entree.coordsApi.lat + ',' + entree.coordsApi.lon : id;
+    if (!cache || !ville) return;
+    var bilan = calculerBilan(cache.jours, filtre);
+    if (!bilan.mesures) return;
+    var maille = cache.coordsApi ? cache.coordsApi.lat + ',' + cache.coordsApi.lon : id;
     (maillesIdentiques[maille] = maillesIdentiques[maille] || []).push(ville.nom);
-    lignes.push({ ville: ville, bilan: bilan, maille: maille });
-  });
-  lignes.sort(function (a, b) {
-    return (b.bilan.joursSecs / b.bilan.mesures) - (a.bilan.joursSecs / a.bilan.mesures);
+    entrees.push({ ville: ville, jours: cache.jours, bilan: bilan, maille: maille });
   });
 
+  if (!entrees.length) {
+    zone.appendChild(creer('div', 'attente', 'Aucune donnée sur cette période.'));
+    return;
+  }
+
+  var mesure = MESURES[Etat.mesure] || MESURES.repartition;
+  if (mesure.type === 'repartition') rendreComparaisonRepartition(zone, entrees);
+  else rendreComparaisonMesure(zone, entrees, mesure, filtre);
+
+  // Deux villes voisines tombent souvent dans la même maille du modèle :
+  // sans cet avertissement, deux colonnes identiques passeraient pour un bug.
+  for (var maille in maillesIdentiques) {
+    if (maillesIdentiques[maille].length > 1) {
+      var note = creer('p', 'sous-chiffre');
+      note.style.marginTop = '10px';
+      note.textContent = maillesIdentiques[maille].join(' et ') +
+        ' tombent dans la même maille de mesure du modèle (quelques kilomètres) : ' +
+        'leurs chiffres sont identiques, et c’est normal.';
+      zone.appendChild(note);
+    }
+  }
+}
+
+/* ----- Vue « répartition des journées » : les vignettes, empilées ----- */
+function rendreComparaisonRepartition(zone, entrees) {
+  var lignes = entrees.slice().sort(function (a, b) {
+    return (b.bilan.joursSecs / b.bilan.mesures) - (a.bilan.joursSecs / a.bilan.mesures);
+  });
   lignes.forEach(function (l) {
     var ligne = creer('div', 'compare-ligne');
     ligne.appendChild(creer('div', 'nom', l.ville.nom));
@@ -1727,6 +1957,8 @@ function rendreComparaison() {
     zone.appendChild(ligne);
   });
 
+  var boite = creer('div');
+  boite.style.overflowX = 'auto';
   var table = creer('table', 'tableau');
   var thead = creer('thead'), trh = creer('tr');
   ['Ville', 'Jours secs', 'Pluie continue', 'Eau (mm)', 'Soleil (h)'].forEach(function (t, i) {
@@ -1745,20 +1977,240 @@ function rendreComparaison() {
     tbody.appendChild(tr);
   });
   table.appendChild(tbody);
-  zone.appendChild(table);
+  boite.appendChild(table);
+  zone.appendChild(boite);
+}
 
-  // Deux villes voisines tombent souvent dans la même maille du modèle :
-  // sans cet avertissement, deux colonnes identiques passeraient pour un bug.
-  for (var maille in maillesIdentiques) {
-    if (maillesIdentiques[maille].length > 1) {
-      var note = creer('p', 'sous-chiffre');
-      note.style.marginTop = '10px';
-      note.textContent = maillesIdentiques[maille].join(' et ') +
-        ' tombent dans la même maille de mesure du modèle (quelques kilomètres) : ' +
-        'leurs chiffres sont identiques, et c’est normal.';
-      zone.appendChild(note);
+/* ----- Vue « une seule mesure » : classement + courbe mois par mois ----- */
+function rendreComparaisonMesure(zone, entrees, mesure, filtre) {
+  var affichees = entrees.slice(0, NB_SERIES);
+  var restantes = entrees.length - affichees.length;
+
+  affichees.forEach(function (e) {
+    var r = agregerMesure(e.jours, filtre, mesure);
+    e.valeur = r.valeur;
+    e.mesurees = r.mesurees;
+    e.serie = serieMensuelle(e.jours, Etat.annee, filtre, mesure);
+  });
+
+  var classees = affichees.slice().sort(function (a, b) {
+    if (a.valeur === null) return 1;
+    if (b.valeur === null) return -1;
+    return b.valeur - a.valeur;
+  });
+
+  zone.appendChild(creer('p', 'sous-chiffre', mesure.nom + ' — ' + mesure.aide));
+
+  // Classement : magnitude. Les noms et les valeurs sont écrits en clair,
+  // la couleur ne porte jamais l'information à elle seule.
+  var valeurs = affichees.map(function (e) { return e.valeur; })
+                         .filter(function (v) { return v !== null; });
+  var basAxe = mesure.basZero ? 0 : Math.min.apply(null, valeurs);
+  var hautAxe = Math.max.apply(null, valeurs);
+  var ech = echelleLisible(basAxe, hautAxe, 4);
+  var classement = creer('div', 'classement');
+  classees.forEach(function (e) {
+    var ligne = creer('div', 'classement-ligne');
+    var nom = creer('div', 'nom');
+    var puce = creer('span', 'puce-serie');
+    puce.style.background = couleurSerie(e.ville.id);
+    nom.appendChild(puce);
+    nom.appendChild(document.createTextNode(e.ville.nom));
+    ligne.appendChild(nom);
+    var part = (e.valeur === null) ? null
+      : Math.round((e.valeur - ech.min) / (ech.max - ech.min) * 100);
+    var piste = creer('div', 'piste' + (mesure.basZero ? '' : ' points'));
+    if (mesure.basZero) {
+      // Une barre encode une longueur depuis zéro : elle n'est légitime
+      // que pour une mesure dont le zéro a un sens.
+      var remplissage = creer('div', 'remplissage');
+      remplissage.style.width = (part === null ? 0 : Math.max(2, part)) + '%';
+      remplissage.style.background = couleurSerie(e.ville.id);
+      piste.appendChild(remplissage);
+    } else if (part !== null) {
+      // Axe tronqué : un point, jamais une barre — sinon trois dixièmes de
+      // degré d'écart se liraient comme un rapport du simple au double.
+      var point = creer('div', 'point');
+      point.style.left = part + '%';
+      point.style.background = couleurSerie(e.ville.id);
+      piste.appendChild(point);
     }
+    ligne.appendChild(piste);
+    ligne.appendChild(creer('div', 'valeur', formaterValeur(e.valeur, mesure) + ' ' + mesure.court));
+    classement.appendChild(ligne);
+  });
+  zone.appendChild(classement);
+  if (!mesure.basZero) {
+    zone.appendChild(creer('p', 'sous-chiffre',
+      'Axe de ' + formaterValeur(ech.min, mesure) + ' à ' + formaterValeur(ech.max, mesure) +
+      ' ' + mesure.court + '. Des points et non des barres : l’axe ne part pas de zéro, ' +
+      'et une barre ferait passer quelques dixièmes de degré pour un écart énorme.'));
   }
+
+  zone.appendChild(creer('h3', null, 'Mois par mois'));
+  zone.appendChild(courbeMensuelle(affichees, mesure));
+  zone.appendChild(legendeSeries(affichees));
+
+  var boite = creer('div');
+  boite.style.overflowX = 'auto';
+  boite.style.marginTop = '12px';
+  var table = creer('table', 'tableau');
+  var thead = creer('thead'), trh = creer('tr');
+  ['Ville', mesure.bref + ' (' + mesure.court + ')', 'Jours mesurés'].forEach(function (t, i) {
+    trh.appendChild(creer('th', i ? 'num' : null, t));
+  });
+  thead.appendChild(trh);
+  table.appendChild(thead);
+  var tbody = creer('tbody');
+  classees.forEach(function (e) {
+    var tr = creer('tr');
+    tr.appendChild(creer('td', null, e.ville.nom));
+    tr.appendChild(creer('td', 'num', formaterValeur(e.valeur, mesure)));
+    tr.appendChild(creer('td', 'num', String(e.mesurees)));
+    tbody.appendChild(tr);
+  });
+  table.appendChild(tbody);
+  boite.appendChild(table);
+  zone.appendChild(boite);
+
+  if (restantes > 0) {
+    zone.appendChild(creer('p', 'sous-chiffre',
+      restantes + (restantes > 1 ? ' villes supplémentaires sont sélectionnées' : ' ville supplémentaire est sélectionnée') +
+      ' : le graphique en affiche ' + NB_SERIES + ' au maximum, au-delà les couleurs ne se distinguent plus.'));
+  }
+}
+
+function legendeSeries(entrees) {
+  var zone = creer('div', 'legende');
+  zone.style.marginTop = '6px';
+  entrees.forEach(function (e) {
+    var chip = creer('span');
+    chip.style.display = 'inline-flex';
+    chip.style.alignItems = 'center';
+    chip.style.gap = '5px';
+    chip.style.fontSize = '.74rem';
+    chip.style.padding = '4px 8px';
+    chip.style.borderRadius = '999px';
+    chip.style.border = '1px solid var(--bord)';
+    var puce = creer('span', 'puce-serie');
+    puce.style.background = couleurSerie(e.ville.id);
+    chip.appendChild(puce);
+    chip.appendChild(document.createTextNode(e.ville.nom));
+    zone.appendChild(chip);
+  });
+  return zone;
+}
+
+/* Courbe mensuelle, une ligne par ville. Les trous ne sont pas reliés :
+   relier deux points de part et d'autre d'un mois sans données inventerait
+   une tendance qui n'a pas été mesurée. */
+function courbeMensuelle(entrees, mesure) {
+  var L = 360, H = 200, gauche = 34, droite = 10, haut = 12, bas = 26;
+  var boite = creer('div', 'courbe-boite');
+  var svg = svgNoeud('svg', { viewBox: '0 0 ' + L + ' ' + H, role: 'img',
+    'aria-label': mesure.nom + ', mois par mois, pour ' + entrees.map(function (e) { return e.ville.nom; }).join(', ') });
+
+  var toutes = [];
+  entrees.forEach(function (e) {
+    e.serie.forEach(function (pt) { if (pt.valeur !== null) toutes.push(pt.valeur); });
+  });
+  if (!toutes.length) {
+    boite.appendChild(creer('div', 'attente', 'Pas de données mensuelles sur cette période.'));
+    return boite;
+  }
+  var ech = echelleLisible(mesure.basZero ? 0 : Math.min.apply(null, toutes),
+                           Math.max.apply(null, toutes), 4);
+  var x = function (mois) { return gauche + (mois - 1) * (L - gauche - droite) / 11; };
+  var y = function (v) { return H - bas - (v - ech.min) / (ech.max - ech.min) * (H - haut - bas); };
+
+  ech.graduations.forEach(function (g) {
+    var yy = y(g);
+    svg.appendChild(svgNoeud('line', { x1: gauche, y1: yy, x2: L - droite, y2: yy, class: 'grille-ligne' }));
+    var t = svgNoeud('text', { x: gauche - 4, y: yy + 3, class: 'axe-texte', 'text-anchor': 'end' });
+    t.textContent = formaterValeur(g, mesure);
+    svg.appendChild(t);
+  });
+  for (var mois = 1; mois <= 12; mois++) {
+    var tm = svgNoeud('text', { x: x(mois), y: H - 8, class: 'axe-texte', 'text-anchor': 'middle' });
+    tm.textContent = MOIS_COURTS[mois - 1].slice(0, 1).toUpperCase();
+    svg.appendChild(tm);
+  }
+
+  var viseur = svgNoeud('line', { x1: 0, y1: haut, x2: 0, y2: H - bas, class: 'viseur' });
+  svg.appendChild(viseur);
+
+  entrees.forEach(function (e) {
+    var couleur = couleurSerie(e.ville.id);
+    var segment = [];
+    var segments = [];
+    e.serie.forEach(function (pt) {
+      if (pt.valeur === null) { if (segment.length) segments.push(segment); segment = []; return; }
+      segment.push([x(pt.mois), y(pt.valeur)]);
+    });
+    if (segment.length) segments.push(segment);
+    segments.forEach(function (seg) {
+      if (seg.length === 1) {
+        svg.appendChild(svgNoeud('circle', { cx: seg[0][0], cy: seg[0][1], r: 3, fill: couleur }));
+        return;
+      }
+      svg.appendChild(svgNoeud('path', {
+        d: 'M' + seg.map(function (p) { return p[0].toFixed(1) + ' ' + p[1].toFixed(1); }).join(' L'),
+        fill: 'none', stroke: couleur, 'stroke-width': 2,
+        'stroke-linecap': 'round', 'stroke-linejoin': 'round'
+      }));
+    });
+    e.serie.forEach(function (pt) {
+      if (pt.valeur === null) return;
+      svg.appendChild(svgNoeud('circle', { cx: x(pt.mois), cy: y(pt.valeur), r: 2.5, fill: couleur }));
+    });
+  });
+
+  boite.appendChild(svg);
+  var infobulle = creer('div', 'infobulle');
+  boite.appendChild(infobulle);
+  brancherInfobulle(boite, svg, viseur, infobulle, entrees, mesure, x, L, gauche, droite);
+  return boite;
+}
+
+function brancherInfobulle(boite, svg, viseur, infobulle, entrees, mesure, x, L, gauche, droite) {
+  function auPointeur(ev) {
+    var rect = svg.getBoundingClientRect();
+    var ratio = L / rect.width;
+    var xSvg = (ev.clientX - rect.left) * ratio;
+    var mois = Math.round((xSvg - gauche) / ((L - gauche - droite) / 11)) + 1;
+    mois = Math.max(1, Math.min(12, mois));
+    viseur.setAttribute('x1', x(mois));
+    viseur.setAttribute('x2', x(mois));
+    viseur.classList.add('visible');
+    vider(infobulle);
+    infobulle.appendChild(creer('div', 'mois', MOIS_NOMS[mois - 1]));
+    entrees.forEach(function (e) {
+      var pt = e.serie[mois - 1];
+      var ligne = creer('div', 'ligne');
+      var gaucheBloc = creer('span');
+      var puce = creer('span', 'puce-serie');
+      puce.style.background = couleurSerie(e.ville.id);
+      gaucheBloc.appendChild(puce);
+      gaucheBloc.appendChild(document.createTextNode(e.ville.nom));
+      ligne.appendChild(gaucheBloc);
+      ligne.appendChild(creer('b', null, formaterValeur(pt ? pt.valeur : null, mesure) + ' ' + mesure.court));
+      infobulle.appendChild(ligne);
+    });
+    infobulle.classList.add('visible');
+    var largeurBulle = infobulle.offsetWidth || 130;
+    var posX = (x(mois) / L) * rect.width - largeurBulle / 2;
+    posX = Math.max(0, Math.min(rect.width - largeurBulle, posX));
+    infobulle.style.left = posX + 'px';
+    infobulle.style.top = '4px';
+  }
+  function partir() {
+    viseur.classList.remove('visible');
+    infobulle.classList.remove('visible');
+  }
+  svg.addEventListener('pointermove', auPointeur);
+  svg.addEventListener('pointerdown', auPointeur);
+  svg.addEventListener('pointerleave', partir);
+  svg.addEventListener('pointercancel', partir);
 }
 
 function trouverVille(id) {
@@ -1950,6 +2402,15 @@ function remplirSelecteurs() {
   });
   sv.value = Etat.ville.id;
 
+  var sm = el('choix-mesure');
+  vider(sm);
+  ORDRE_MESURES.forEach(function (id) {
+    var o = creer('option', null, MESURES[id].nom);
+    o.value = id;
+    sm.appendChild(o);
+  });
+  sm.value = Etat.mesure;
+
   var sa = el('choix-annee');
   vider(sa);
   anneesACharger().slice().reverse().forEach(function (a) {
@@ -2071,17 +2532,27 @@ function brancherEvenements() {
     var i = Etat.comparees.indexOf(id);
     if (i >= 0) {
       Etat.comparees.splice(i, 1);
+      libererSerie(id);
       rendreBoutonsComparaison();
       rendreComparaison();
       return;
     }
     Etat.comparees.push(id);
+    attribuerSerie(id);
     rendreBoutonsComparaison();
     el('compare-resultat').textContent = 'Chargement de ' + trouverVille(id).nom + '…';
     chargerVillePourComparaison(id).then(function () {
       majProgression(null);
       rendreComparaison();
     });
+  });
+
+  el('choix-mesure').addEventListener('change', function () {
+    Etat.mesure = this.value;
+    var prefs = lirePrefs();
+    prefs.mesure = Etat.mesure;
+    ecrirePrefs(prefs);
+    rendreComparaison();
   });
 
   el('btn-vider-cache').addEventListener('click', function () {
@@ -2118,6 +2589,8 @@ function demarrer() {
   if (prefs.ville) Etat.ville = trouverVille(prefs.ville) || VILLES[0];
   Etat.annee = new Date().getFullYear();
   Etat.comparees = [Etat.ville.id];
+  attribuerSerie(Etat.ville.id);
+  if (prefs.mesure && MESURES[prefs.mesure]) Etat.mesure = prefs.mesure;
   remplirSelecteurs();
   brancherEvenements();
   rendreMethodo();

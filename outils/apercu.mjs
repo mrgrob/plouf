@@ -266,6 +266,16 @@ await capturer('6-comparaison', null, async () => {
   await page.waitForTimeout(2500);
   await page.evaluate(() => document.getElementById('compare-resultat').scrollIntoView());
 });
+await capturer('6b-mesure-eau', null, async () => {
+  await page.selectOption('#choix-mesure', 'eau');
+  await page.waitForTimeout(400);
+  await page.evaluate(() => document.getElementById('compare-resultat').scrollIntoView());
+});
+await capturer('6c-mesure-temperature', null, async () => {
+  await page.selectOption('#choix-mesure', 'tmax');
+  await page.waitForTimeout(400);
+  await page.evaluate(() => document.getElementById('compare-resultat').scrollIntoView());
+});
 await capturer('7-methodologie', 'methodo');
 await capturer('8-diagnostic', null, async () => {
   await page.evaluate(() => document.getElementById('diagnostic').scrollIntoView());

@@ -22,7 +22,8 @@ const M = new Function(code + `
   return { SEUILS, NB_CRENEAUX, CATEGORIES, joursDansMois, jourSemaine,
            minutesDepuisMinuit, dureeJourDansFenetre, grouperHeuresParJour,
            calculerMesures, deriver, categorieCiel, classerJour, encoderJour, decoderJour,
-           fusionnerJours, calculerBilan, formaterDuree };
+           fusionnerJours, calculerBilan, formaterDuree,
+           MESURES, ORDRE_MESURES, agregerMesure, serieMensuelle, echelleLisible };
 `)();
 
 /* --- Fabrique de journées : pluie et soleil donnés créneau par créneau --- */
@@ -328,4 +329,81 @@ test('les durées se lisent en heures et minutes', () => {
   assert.equal(M.formaterDuree(519), '8 h 39');
   assert.equal(M.formaterDuree(840), '14 h');
   assert.equal(M.formaterDuree(45), '45 min');
+});
+
+/* ============ Mesures comparables entre villes ============ */
+
+function troisJours() {
+  const pluie1 = repete(0); pluie1[3] = 4;                    // une averse de 4 mm
+  const pluie2 = repete(2);                                   // 14 h de pluie, 28 mm
+  return {
+    '2026-03-05': jour({ date: '2026-03-05', pluie: repete(0), soleil: repete(60), tmax: 18, tmin: 7 }),
+    '2026-03-06': jour({ date: '2026-03-06', pluie: pluie1, soleil: repete(30), tmax: 14, tmin: 6 }),
+    '2026-07-20': jour({ date: '2026-07-20', pluie: pluie2, soleil: repete(0), tmax: 20, tmin: 13 })
+  };
+}
+
+test('chaque mode d’agrégation donne le bon chiffre', () => {
+  const jours = troisJours();
+  assert.equal(M.agregerMesure(jours, null, M.MESURES.eau).valeur, 32, 'somme : 0 + 4 + 28 mm');
+  assert.equal(M.agregerMesure(jours, null, M.MESURES.pluieContinue).valeur, 1, 'compte');
+  assert.equal(Math.round(M.agregerMesure(jours, null, M.MESURES.joursSecs).valeur), 33, 'pourcent : 1 sur 3');
+  assert.equal(Math.round(M.agregerMesure(jours, null, M.MESURES.tmax).valeur * 10) / 10, 17.3, 'moyenne');
+});
+
+test('une mesure compte les journées mesurées, pas les journées du calendrier', () => {
+  const jours = troisJours();
+  jours['2026-03-07'] = jour({ date: '2026-03-07', pluie: repete(0), soleil: repete(60), partiel: true });
+  jours['2026-03-08'] = jour({ date: '2026-03-08', pluie: repete(0), creneaux: 3 });
+  const r = M.agregerMesure(jours, null, M.MESURES.joursSecs);
+  assert.equal(r.mesurees, 3, 'le jour en cours et la journée incomplète sont écartés');
+  assert.equal(Math.round(r.valeur), 33);
+});
+
+test('une température négative n’est pas confondue avec une absence de donnée', () => {
+  const jours = {
+    '2026-01-01': jour({ date: '2026-01-01', pluie: repete(0), soleil: repete(30), tmin: -4, tmax: 2 }),
+    '2026-01-02': jour({ date: '2026-01-02', pluie: repete(0), soleil: repete(30), tmin: 0, tmax: 4 })
+  };
+  const r = M.agregerMesure(jours, null, M.MESURES.tmin);
+  assert.equal(r.retenus, 2, 'zéro et les valeurs négatives comptent comme des mesures');
+  assert.equal(r.valeur, -2);
+});
+
+test('la série mensuelle laisse un trou là où rien n’a été mesuré', () => {
+  const serie = M.serieMensuelle(troisJours(), 2026, null, M.MESURES.eau);
+  assert.equal(serie.length, 12);
+  assert.equal(serie[2].valeur, 4, 'mars : les deux journées de mars, 0 + 4 mm');
+  assert.equal(serie[6].valeur, 28, 'juillet : la seule journée de juillet, 28 mm');
+  assert.equal(serie[0].valeur, null, 'janvier : aucune journée mesurée, donc un trou');
+  assert.equal(serie[2].valeur + serie[6].valeur,
+    M.agregerMesure(troisJours(), null, M.MESURES.eau).valeur,
+    'la somme des mois doit retomber sur le total de la période');
+});
+
+test('la série mensuelle respecte le filtre de période', () => {
+  const serie = M.serieMensuelle(troisJours(), 2026, (iso) => +iso.slice(5, 7) >= 6, M.MESURES.eau);
+  assert.equal(serie[2].valeur, null, 'mars est exclu par le filtre');
+});
+
+test('les graduations d’axe tombent sur des nombres lisibles', () => {
+  const e = M.echelleLisible(0, 137, 4);
+  assert.equal(e.min, 0);
+  assert.ok(e.max >= 137);
+  assert.deepEqual(e.graduations, [0, 50, 100, 150]);
+
+  const t = M.echelleLisible(8.2, 21.4, 4);
+  assert.ok(t.min <= 8.2 && t.max >= 21.4);
+  assert.ok(t.graduations.length >= 3);
+});
+
+test('toutes les mesures proposées sont définies et complètes', () => {
+  M.ORDRE_MESURES.forEach((id) => {
+    const mesure = M.MESURES[id];
+    assert.ok(mesure, id + ' doit exister');
+    if (mesure.type === 'repartition') return;
+    assert.ok(mesure.nom && mesure.bref && mesure.court && mesure.aide, id + ' doit être décrite');
+    assert.ok(mesure.test || mesure.valeur, id + ' doit savoir lire une journée');
+    assert.ok(['somme', 'compte', 'pourcent', 'moyenne'].includes(mesure.agregation), id + ' : agrégation connue');
+  });
 });

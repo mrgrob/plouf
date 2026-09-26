@@ -86,6 +86,29 @@ Deux points de méthode qui changent tout, et qui ne sont pas évidents :
   de la fenêtre.** Sinon, un 21 décembre de ciel bleu absolu plafonnerait à 62 %
   et aucune journée d'hiver ne pourrait jamais être ensoleillée.
 
+## Comparer les villes
+
+L'onglet **Bilan** compare les villes chargées sur une mesure choisie dans la
+liste : répartition des journées, eau tombée, journées sans une goutte, pluie
+continue, averses, heures de soleil, températures moyennes, canicule, gel.
+
+Chaque mesure donne un classement et une courbe **mois par mois** — c'est là
+que la démonstration se joue : « il pleut d'octobre à mars » devient une courbe
+qu'on regarde, pas une impression.
+
+Deux règles de lecture tenues par le code :
+
+- **Une seule mesure à la fois.** Des millimètres et des degrés sur le même axe
+  ne veulent rien dire ; l'application ne propose donc jamais les deux ensemble.
+- **Une barre part toujours de zéro.** Pour les températures, dont l'axe est
+  forcément tronqué, ce sont des **points** et non des barres — sinon trois
+  dixièmes de degré d'écart se liraient comme un rapport du simple au double.
+
+Une ville garde sa couleur tant qu'elle est comparée, même si une autre est
+retirée : la couleur suit la ville, jamais son rang. La palette est vérifiée
+pour le daltonisme dans les deux thèmes, et chaque valeur est écrite en toutes
+lettres à côté de sa barre — la couleur ne porte jamais l'information seule.
+
 ## Ajouter une ville
 
 Dans `index.html`, chercher `var VILLES` (vers le début du script) et ajouter une
